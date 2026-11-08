@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About Me</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Mali:wght@400;600;700&family=Prompt:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f3ec;
+    --dot: #d9d3c4;
+    --ink: #22201c;
+    --muted: #6d675c;
+    --note-shadow: 0 6px 18px rgba(40, 30, 10, .12), 0 1px 3px rgba(40, 30, 10, .1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17161a; --dot: #2c2a31; --ink: #f1eee8; --muted: #a29d94;
+      --note-shadow: 0 6px 18px rgba(0,0,0,.45);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17161a; --dot: #2c2a31; --ink: #f1eee8; --muted: #a29d94;
+    --note-shadow: 0 6px 18px rgba(0,0,0,.45);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(var(--dot) 1.2px, transparent 1.2px);
+    background-size: 22px 22px;
+    color: var(--ink);
+    font-family: "Prompt", system-ui, sans-serif;
+    overflow-x: hidden;
+    cursor: crosshair;
+  }
+
+  #stage { position: relative; width: 100%; min-height: 100vh; overflow: clip; }
+
+  /* ---------- notes ---------- */
+  .note {
+    position: absolute;
+    width: min(280px, 82vw);
+    padding: 16px 18px 18px;
+    border-radius: 6px;
+    background: var(--c, #fff6a8);
+    color: #23201a;
+    box-shadow: var(--note-shadow);
+    font-family: "Mali", "Prompt", sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    transform-origin: top left;
+    animation: pop .35s cubic-bezier(.2, 1.6, .4, 1) both;
+    rotate: var(--r, 0deg);
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+  }
+  .note.dragging { cursor: grabbing; z-index: 50; box-shadow: 0 14px 30px rgba(0,0,0,.25); }
+  .note h3 { margin: 0 0 6px; font-family: "Prompt", sans-serif; font-size: 15px; font-weight: 600; opacity: .75; }
+  .note .body { white-space: pre-wrap; word-break: break-word; min-height: 1.5em; }
+  .note .by { margin-top: 10px; font-size: 12px; opacity: .55; font-family: "Prompt", sans-serif; }
+  .note.typing .body::after {
+    content: ""; display: inline-block; width: 2px; height: 1.1em;
+    background: currentColor; vertical-align: -3px; margin-left: 1px;
+    animation: blink .8s steps(1) infinite;
+  }
+  .note.title {
+    width: auto; max-width: 92vw;
+    background: transparent; box-shadow: none; color: var(--ink);
+    font-family: "Prompt", sans-serif; padding: 0;
+  }
+  .note.title .body { font-size: clamp(38px, 8vw, 84px); font-weight: 800; line-height: 1.05; letter-spacing: -.02em; }
+  .note.title h3 { font-size: clamp(14px, 2vw, 18px); color: var(--muted); opacity: 1; font-weight: 400; }
+  .note.visitor .body:empty::before { content: attr(data-placeholder); opacity: .45; }
+  .note.visitor .body[contenteditable] { outline: none; cursor: text; user-select: text; }
+
+  @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------- cursors ---------- */
+  .cursor {
+    position: absolute; left: 0; top: 0; z-index: 100;
+    pointer-events: none;
+    transition: transform var(--dur, 900ms) cubic-bezier(.45, .05, .2, 1);
+    will-change: transform;
+  }
+  .cursor svg { display: block; filter: drop-shadow(0 2px 2px rgba(0,0,0,.25)); transition: transform .12s; }
+  .cursor.press svg { transform: scale(.82); }
+  .cursor .tag {
+    position: absolute; left: 16px; top: 20px;
+    padding: 3px 9px; border-radius: 4px 10px 10px 10px;
+    background: var(--cc); color: #fff;
+    font-size: 12px; font-weight: 600; white-space: nowrap;
+  }
+  .ripple {
+    position: absolute; z-index: 90; pointer-events: none;
+    width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%;
+    border: 2px solid var(--cc);
+    animation: ripple .6s ease-out forwards;
+  }
+  @keyframes ripple { from { transform: scale(.2); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+
+  /* ---------- toolbar ---------- */
+  .bar {
+    position: fixed; right: 16px; bottom: 16px; z-index: 200;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .bar button {
+    font: 600 14px "Prompt", sans-serif;
+    border: 0; border-radius: 999px; padding: 10px 16px;
+    background: var(--ink); color: var(--bg); cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,.18);
+  }
+  .hint {
+    position: fixed; left: 16px; bottom: 20px; z-index: 200;
+    font-size: 13px; color: var(--muted);
+    opacity: 0; transition: opacity .6s;
+  }
+  .hint.show { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cursor { transition-duration: 0ms !important; }
+    .note { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div class="hint" id="hint">คลิกตรงไหนก็ได้เพื่อทิ้งข้อความ · ลากโน้ตย้ายได้</div>
+<div class="bar"><button id="replay">↻ เล่นใหม่</button></div>
+
+<script>
+/* =========================================================
+   ✏️ แก้ข้อมูลของคุณตรงนี้
+   - x, y = ตำแหน่งบนจอ (เปอร์เซ็นต์ 0–100) ใช้บนจอใหญ่
+   - color = สีโน้ต, by = ชื่อเคอร์เซอร์ที่จะมาพิมพ์
+   ========================================================= */
+const NOTES = [
+  { type: "title", title: "สวัสดีครับ 👋 ผมชื่อ", text: "ชื่อของคุณ", x: 6, y: 8, by: "Mint" },
+  { title: "ตอนนี้ทำอะไรอยู่", text: "นักศึกษา / Developer / Designer\nใส่สิ่งที่ทำอยู่ตรงนี้", x: 8, y: 40, color: "#fff2a1", by: "Bank" },
+  { title: "ชอบอะไร", text: "☕ กาแฟ\n🎮 เกม\n🎧 ฟังเพลงตอนทำงาน", x: 40, y: 34, color: "#ffd1dc", by: "Ploy" },
+  { title: "สกิล", text: "HTML · CSS · JavaScript\nFigma · Python", x: 70, y: 14, color: "#c9f0d5", by: "Mint" },
+  { title: "เป้าหมายปีนี้", text: "ทำโปรเจกต์ของตัวเองให้เสร็จสักอัน 🚀", x: 68, y: 52, color: "#cfe3ff", by: "Bank" },
+  { title: "ติดต่อ", text: "📧 your@email.com\n🐙 github.com/RoonEvil", x: 36, y: 70, color: "#ffe1bf", by: "Ploy" },
+];
+
+/* คนที่เป็นเจ้าของเคอร์เซอร์ */
+const CURSORS = [
+  { name: "Mint", color: "#16a37f" },
+  { name: "Bank", color: "#3b6cf6" },
+  { name: "Ploy", color: "#e0457b" },
+];
+/* ========================================================= */
+
+const stage = document.getElementById("stage");
+const hint = document.getElementById("hint");
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const rand = (a, b) => a + Math.random() * (b - a);
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let runId = 0;
+
+function cursorSVG(color) {
+  return `<svg width="22" height="24" viewBox="0 0 22 24"><path d="M2 1.5 L2 19.5 L7 15 L10.5 22.5 L13.6 21 L10.2 13.8 L17 13.5 Z" fill="${color}" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+}
+
+class Cursor {
+  constructor({ name, color }) {
+    this.name = name; this.color = color; this.busy = false;
+    this.el = document.createElement("div");
+    this.el.className = "cursor";
+    this.el.style.setProperty("--cc", color);
+    this.el.innerHTML = cursorSVG(color) + `<span class="tag">${name}</span>`;
+    stage.appendChild(this.el);
+    this.x = rand(0, innerWidth); this.y = innerHeight + 40;
+    this.place(this.x, this.y, 0);
+  }
+  place(x, y, dur) {
+    this.x = x; this.y = y;
+    this.el.style.setProperty("--dur", dur + "ms");
+    this.el.style.transform = `translate(${x}px, ${y}px)`;
+  }
+  async moveTo(x, y) {
+    const d = Math.hypot(x - this.x, y - this.y);
+    const dur = reduce ? 0 : Math.min(1400, 350 + d * 0.9);
+    this.place(x, y, dur);
+    await sleep(dur + 60);
+  }
+  async click() {
+    this.el.classList.add("press");
+    const r = document.createElement("div");
+    r.className = "ripple";
+    r.style.setProperty("--cc", this.color);
+    r.style.left = this.x + 2 + "px"; r.style.top = this.y + 2 + "px";
+    stage.appendChild(r);
+    setTimeout(() => r.remove(), 650);
+    await sleep(140);
+    this.el.classList.remove("press");
+  }
+  async wander(id) {
+    while (id === runId) {
+      if (!this.busy) {
+        const nx = Math.min(innerWidth - 90, Math.max(10, this.x + rand(-90, 90)));
+        await this.moveTo(nx, Math.max(20, this.y + rand(-60, 60)));
+      }
+      await sleep(rand(600, 1600));
+    }
+  }
+}
+
+function layout(i, n) {
+  // จอเล็ก: เรียงลงมาเป็นคอลัมน์ / จอใหญ่: ใช้ x, y ที่กำหนด
+  const W = innerWidth;
+  if (W < 760) {
+    const y = i === 0 ? 40 : 200 + (i - 1) * 190;
+    const x = i === 0 ? 20 : (i % 2 ? 16 : Math.max(16, W - Math.min(280, W * .82) - 16));
+    return { x, y };
+  }
+  const H = Math.max(innerHeight, 720);
+  return { x: NOTES[i].x / 100 * W, y: NOTES[i].y / 100 * H };
+}
+
+function fitStage() {
+  const notes = [...stage.querySelectorAll(".note")];
+  const bottom = notes.reduce((m, n) => Math.max(m, n.offsetTop + n.offsetHeight), 0);
+  stage.style.minHeight = Math.max(innerHeight, bottom + 120) + "px";
+}
+
+function makeNote(data, by, pos) {
+  const n = document.createElement("div");
+  n.className = "note" + (data.type === "title" ? " title" : "");
+  if (data.color) n.style.setProperty("--c", data.color);
+  n.style.setProperty("--r", data.type === "title" ? "0deg" : rand(-3, 3).toFixed(1) + "deg");
+  n.style.left = pos.x + "px"; n.style.top = pos.y + "px";
+  n.innerHTML = (data.title ? `<h3></h3>` : "") + `<div class="body"></div>` +
+    (data.type === "title" ? "" : `<div class="by" style="color:${by.color}">— ${by.name}</div>`);
+  if (data.title) n.querySelector("h3").textContent = data.title;
+  stage.appendChild(n);
+  makeDraggable(n);
+  return n;
+}
+
+async function typeInto(note, text, cursor, id) {
+  const body = note.querySelector(".body");
+  note.classList.add("typing");
+  const chars = Array.from(text);
+  for (const ch of chars) {
+    if (id !== runId) return;
+    body.textContent += ch;
+    // เคอร์เซอร์ขยับตามท้ายข้อความ
+    const r = document.createRange(); r.selectNodeContents(body);
+    const rects = r.getClientRects(); const last = rects[rects.length - 1];
+    if (last) cursor.place(last.right + scrollX + 6, last.bottom + scrollY - 6, 120);
+    fitStage();
+    await sleep(reduce ? 0 : (ch === "\n" ? 220 : rand(35, 95)));
+  }
+  note.classList.remove("typing");
+}
+
+async function play() {
+  const id = ++runId;
+  stage.innerHTML = "";
+  hint.classList.remove("show");
+  const cursors = Object.fromEntries(CURSORS.map(c => [c.name, new Cursor(c)]));
+  Object.values(cursors).forEach(c => c.wander(id));
+
+  // แต่ละคนทำงานของตัวเองพร้อมกัน แต่เริ่มเหลื่อมเวลากัน
+  const queues = {};
+  NOTES.forEach((n, i) => {
+    const name = cursors[n.by] ? n.by : CURSORS[i % CURSORS.length].name;
+    (queues[name] ||= []).push(i);
+  });
+
+  const jobs = Object.entries(queues).map(async ([name, idxs], k) => {
+    const c = cursors[name];
+    await sleep(k * 700 + 300);
+    for (const i of idxs) {
+      if (id !== runId) return;
+      // รอให้คนก่อนหน้าวางเสร็จนิดนึง จะได้ดูเป็นลำดับ
+      while (i > 0 && !stage.querySelector(`[data-i="${i - 1}"]`) && id === runId) await sleep(120);
+      c.busy = true;
+      const pos = layout(i, NOTES.length);
+      await c.moveTo(pos.x, pos.y);
+      await c.click();
+      const note = makeNote(NOTES[i], c, pos);
+      note.dataset.i = i;
+      await sleep(250);
+      await typeInto(note, NOTES[i].text, c, id);
+      c.busy = false;
+      await sleep(400);
+    }
+    // งานเสร็จ ออกไปเดินเล่น
+  });
+
+  await Promise.all(jobs);
+  if (id === runId) hint.classList.add("show");
+}
+
+/* ---------- ผู้เยี่ยมชมคลิกเพื่อทิ้งข้อความ ---------- */
+stage.addEventListener("click", e => {
+  if (e.target.closest(".note")) return;
+  const colors = ["#fff2a1", "#ffd1dc", "#c9f0d5", "#cfe3ff", "#ffe1bf", "#e4d4ff"];
+  const n = makeNote({ title: "ข้อความถึงฉัน", color: colors[Math.floor(Math.random() * colors.length)] },
+    { name: "คุณ", color: "#555" }, { x: e.pageX - 20, y: e.pageY - 20 });
+  n.classList.add("visitor");
+  const body = n.querySelector(".body");
+  body.contentEditable = "true";
+  body.dataset.placeholder = "พิมพ์อะไรก็ได้...";
+  body.focus();
+  body.addEventListener("blur", () => { if (!body.textContent.trim()) n.remove(); fitStage(); });
+  body.addEventListener("input", fitStage);
+  fitStage();
+});
+
+/* ---------- ลากโน้ต ---------- */
+function makeDraggable(n) {
+  n.addEventListener("pointerdown", e => {
+    if (e.target.isContentEditable) return;
+    const sx = e.clientX - n.offsetLeft, sy = e.clientY - n.offsetTop;
+    n.classList.add("dragging"); n.setPointerCapture(e.pointerId);
+    const mv = ev => { n.style.left = ev.clientX - sx + "px"; n.style.top = ev.clientY - sy + "px"; };
+    const up = () => { n.classList.remove("dragging"); n.removeEventListener("pointermove", mv); fitStage(); };
+    n.addEventListener("pointermove", mv);
+    n.addEventListener("pointerup", up, { once: true });
+  });
+}
+
+document.getElementById("replay").addEventListener("click", e => { e.stopPropagation(); play(); });
+play();
+</script>
+</body>
+</html>
