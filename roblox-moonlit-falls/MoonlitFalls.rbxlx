@@ -1,0 +1,1578 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" version="4">
+<Item class="Workspace" referent="RBX00000001"><Properties><string name="Name">Workspace</string></Properties></Item>
+<Item class="Lighting" referent="RBX00000002"><Properties><string name="Name">Lighting</string></Properties></Item>
+<Item class="ReplicatedStorage" referent="RBX00000005"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000004"><Properties><string name="Name">Shared</string></Properties><Item class="ModuleScript" referent="RBX00000003"><Properties><string name="Name">Config</string><ProtectedString name="Source"><![CDATA[-- Game settings shared by server and client.
+local Config = {}
+
+Config.GAME_NAME = "Moonlit Falls"
+
+-- One full day (24 in-game hours) in real seconds.
+Config.DAY_CYCLE_SECONDS = 300
+-- Night 1, 4, 7, ... is a full moon.
+Config.FULL_MOON_EVERY = 3
+
+Config.BLOOD_MAX = 100
+Config.BLOOD_START = 60
+Config.BLOOD_DRAIN = 1 -- per second
+Config.SUN_DAMAGE = 10 -- per second, vampire without a ring in direct sun
+Config.MAX_VERVAIN = 5
+Config.TRANSITION_WINDOW = 30 -- die within this many seconds of a bite = wake up as a vampire
+
+Config.Cooldowns = {
+	Bite = 2,
+	Compel = 12,
+	Dash = 5,
+	Stake = 4,
+	Vervain = 3,
+	Claw = 1.5,
+}
+
+Config.SideStats = {
+	Human = { WalkSpeed = 16, MaxHealth = 100 },
+	Vampire = { WalkSpeed = 22, MaxHealth = 150 },
+	Werewolf = { WalkSpeed = 18, MaxHealth = 130 },
+}
+Config.WolfForm = { WalkSpeed = 28, MaxHealth = 240 }
+
+Config.SideInfo = {
+	Human = {
+		title = "🧍 มนุษย์",
+		color = Color3.fromRGB(240, 200, 90),
+		desc = "เก็บเวอร์เวนไว้กันโดนกัด ปักหลักไม้ใส่แวมไพร์",
+	},
+	Vampire = {
+		title = "🧛 แวมไพร์",
+		color = Color3.fromRGB(200, 30, 50),
+		desc = "เร็ว แรง ต้องดื่มเลือด โดนแดดไหม้ถ้าไม่มีแหวน",
+	},
+	Werewolf = {
+		title = "🐺 มนุษย์หมาป่า",
+		color = Color3.fromRGB(150, 100, 60),
+		desc = "คืนพระจันทร์เต็มดวงกลายร่าง กัดแวมไพร์ทีเดียวพิษเข้า",
+	},
+}
+
+return Config
+]]></ProtectedString></Properties></Item>
+</Item>
+</Item>
+<Item class="ServerScriptService" referent="RBX00000010"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Folder" referent="RBX00000009"><Properties><string name="Name">Server</string></Properties><Item class="Script" referent="RBX00000006"><Properties><string name="Name">GameManager</string><ProtectedString name="Source"><![CDATA[-- Moonlit Falls: main server logic.
+-- Sides, day/night + full moon, blood hunger, sunlight, and every ability.
+local Players = game:GetService("Players")
+local Teams = game:GetService("Teams")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Debris = game:GetService("Debris")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local MapBuilder = require(script.Parent:WaitForChild("MapBuilder"))
+local NPCs = require(script.Parent:WaitForChild("NPCs"))
+
+---------------------------------------------------------------- remotes
+local Remotes = Instance.new("Folder")
+Remotes.Name = "Remotes"
+local function remote(name)
+	local r = Instance.new("RemoteEvent")
+	r.Name = name
+	r.Parent = Remotes
+	return r
+end
+local AbilityRemote = remote("Ability")
+local ChooseSideRemote = remote("ChooseSide")
+local NotifyRemote = remote("Notify")
+Remotes.Parent = ReplicatedStorage
+
+---------------------------------------------------------------- teams
+local TEAM_SETUP = {
+	Human = { "Humans", BrickColor.new("Bright yellow") },
+	Vampire = { "Vampires", BrickColor.new("Crimson") },
+	Werewolf = { "Werewolves", BrickColor.new("Brown") },
+}
+local teams = {}
+for side, info in TEAM_SETUP do
+	local t = Instance.new("Team")
+	t.Name = info[1]
+	t.TeamColor = info[2]
+	t.AutoAssignable = false
+	t.Parent = Teams
+	teams[side] = t
+end
+
+---------------------------------------------------------------- helpers
+local RED = Color3.fromRGB(255, 80, 90)
+local GREEN = Color3.fromRGB(140, 255, 150)
+local PURPLE = Color3.fromRGB(200, 150, 255)
+local GOLD = Color3.fromRGB(255, 215, 110)
+
+local function now()
+	return workspace:GetServerTimeNow()
+end
+
+local function notify(plr: Player?, text: string, color: Color3?)
+	if plr then
+		NotifyRemote:FireClient(plr, text, color)
+	end
+end
+
+local function notifyAll(text: string, color: Color3?)
+	NotifyRemote:FireAllClients(text, color)
+end
+
+local function getSide(plr: Player): string
+	return plr:GetAttribute("Side") or "Human"
+end
+
+-- Side of any character model (player or townsfolk).
+local function sideOf(model: Model): string?
+	local p = Players:GetPlayerFromCharacter(model)
+	if p then
+		return getSide(p)
+	end
+	if model:GetAttribute("NPC") then
+		return "Human"
+	end
+	return nil
+end
+
+local function isTransformed(model: Model)
+	return model:GetAttribute("Transformed") == true
+end
+
+local function baseSpeed(model: Model): number
+	local p = Players:GetPlayerFromCharacter(model)
+	if not p then
+		return 10
+	end
+	if isTransformed(model) then
+		return Config.WolfForm.WalkSpeed
+	end
+	return Config.SideStats[getSide(p)].WalkSpeed
+end
+
+-- Vervain lives on the player for players, on the model for townsfolk.
+local function vervainOwner(model: Model): Instance
+	return Players:GetPlayerFromCharacter(model) or model
+end
+local function vervainCount(model: Model): number
+	return vervainOwner(model):GetAttribute("Vervain") or 0
+end
+local function useVervain(model: Model)
+	local owner = vervainOwner(model)
+	owner:SetAttribute("Vervain", math.max(0, vervainCount(model) - 1))
+end
+
+local function addPoints(plr: Player?, amount: number)
+	if not plr then
+		return
+	end
+	local stats = plr:FindFirstChild("leaderstats")
+	local pts = stats and stats:FindFirstChild("Points")
+	if pts then
+		pts.Value += amount
+	end
+end
+
+local function burst(model: Model, color: Color3)
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	local pe = Instance.new("ParticleEmitter")
+	pe.Color = ColorSequence.new(color)
+	pe.Size = NumberSequence.new(0.5, 0)
+	pe.Speed = NumberRange.new(8, 14)
+	pe.Lifetime = NumberRange.new(0.4, 0.8)
+	pe.SpreadAngle = Vector2.new(180, 180)
+	pe.Rate = 0
+	pe.LightEmission = 0.5
+	pe.Parent = root
+	pe:Emit(25)
+	Debris:AddItem(pe, 1.5)
+end
+
+local function damage(attacker: Player?, target: Model, amount: number)
+	local hum = target:FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health <= 0 then
+		return
+	end
+	if attacker then
+		target:SetAttribute("LastAttacker", attacker.UserId)
+	end
+	hum:TakeDamage(amount)
+end
+
+local function stun(model: Model, seconds: number)
+	local hum = model:FindFirstChildOfClass("Humanoid")
+	if not hum then
+		return
+	end
+	local untilT = now() + seconds
+	model:SetAttribute("StunnedUntil", untilT)
+	hum.WalkSpeed = 0
+	hum.JumpHeight = 0
+	if model:GetAttribute("NPC") then
+		hum:MoveTo(model:GetPivot().Position)
+	end
+	task.delay(seconds, function()
+		if model.Parent and (model:GetAttribute("StunnedUntil") or 0) <= now() + 0.05 then
+			hum.WalkSpeed = baseSpeed(model)
+			hum.JumpHeight = 7.2
+		end
+	end)
+end
+
+local function allCharacters(): { Model }
+	local list = {}
+	for _, p in Players:GetPlayers() do
+		if p.Character then
+			table.insert(list, p.Character)
+		end
+	end
+	for _, m in NPCs.Folder:GetChildren() do
+		table.insert(list, m)
+	end
+	return list
+end
+
+local function nearest(from: Model, range: number, filter: (Model) -> boolean): Model?
+	local root = from:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return nil
+	end
+	local best, bestDist = nil, range
+	for _, m in allCharacters() do
+		if m ~= from then
+			local hum = m:FindFirstChildOfClass("Humanoid")
+			local r = m:FindFirstChild("HumanoidRootPart")
+			if hum and r and hum.Health > 0 and filter(m) then
+				local d = (r.Position - root.Position).Magnitude
+				if d <= bestDist then
+					best, bestDist = m, d
+				end
+			end
+		end
+	end
+	return best
+end
+
+local function isSide(...)
+	local wanted = { ... }
+	return function(m: Model)
+		return table.find(wanted, sideOf(m)) ~= nil
+	end
+end
+
+---------------------------------------------------------------- werewolf form
+local function transform(char: Model)
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health <= 0 or isTransformed(char) then
+		return
+	end
+	char:SetAttribute("Transformed", true)
+	for _, p in char:GetDescendants() do
+		if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+			p:SetAttribute("OrigColor", p.Color)
+			p.Color = Color3.fromRGB(70, 50, 35)
+		end
+	end
+	hum.MaxHealth = Config.WolfForm.MaxHealth
+	hum.Health = hum.MaxHealth
+	hum.WalkSpeed = Config.WolfForm.WalkSpeed
+
+	local head = char:FindFirstChild("Head")
+	if head then
+		local bb = Instance.new("BillboardGui")
+		bb.Name = "WolfTag"
+		bb.Size = UDim2.fromOffset(60, 60)
+		bb.StudsOffset = Vector3.new(0, 3, 0)
+		bb.AlwaysOnTop = true
+		local t = Instance.new("TextLabel")
+		t.Size = UDim2.fromScale(1, 1)
+		t.BackgroundTransparency = 1
+		t.Text = "🐺"
+		t.TextScaled = true
+		t.Parent = bb
+		bb.Parent = head
+	end
+	burst(char, Color3.fromRGB(255, 200, 80))
+	notify(Players:GetPlayerFromCharacter(char), "🌕 พระจันทร์เต็มดวง... คุณกลายร่างเป็นหมาป่า!", GOLD)
+end
+
+local function untransform(char: Model)
+	if not isTransformed(char) then
+		return
+	end
+	char:SetAttribute("Transformed", false)
+	for _, p in char:GetDescendants() do
+		if p:IsA("BasePart") and p:GetAttribute("OrigColor") then
+			p.Color = p:GetAttribute("OrigColor")
+		end
+	end
+	local tag = char:FindFirstChild("WolfTag", true)
+	if tag then
+		tag:Destroy()
+	end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		hum.MaxHealth = Config.SideStats.Werewolf.MaxHealth
+		hum.Health = math.min(hum.Health, hum.MaxHealth)
+		hum.WalkSpeed = Config.SideStats.Werewolf.WalkSpeed
+	end
+	notify(Players:GetPlayerFromCharacter(char), "☀️ รุ่งเช้าแล้ว คุณกลับเป็นคนตามเดิม", GOLD)
+end
+
+---------------------------------------------------------------- abilities
+local cooldowns: { [Player]: { [string]: number } } = {}
+
+local function useCooldown(plr: Player, ability: string): boolean
+	local cd = Config.Cooldowns[ability]
+	if not cd then
+		return false
+	end
+	cooldowns[plr] = cooldowns[plr] or {}
+	local last = cooldowns[plr][ability] or 0
+	if now() - last < cd then
+		return false
+	end
+	cooldowns[plr][ability] = now()
+	return true
+end
+
+local Abilities = {}
+
+Abilities.Vampire = {
+	Bite = function(plr: Player, char: Model)
+		local target = nearest(char, 7, isSide("Human"))
+		if not target then
+			notify(plr, "ไม่มีเหยื่ออยู่ใกล้ๆ 🩸")
+			return
+		end
+		local victim = Players:GetPlayerFromCharacter(target)
+		if vervainCount(target) > 0 then
+			useVervain(target)
+			damage(nil, char, 20)
+			stun(char, 2.5)
+			burst(char, Color3.fromRGB(170, 90, 230))
+			notify(plr, "🌿 เลือดมีเวอร์เวน! แสบคอไปหมด", RED)
+			notify(victim, "🌿 เวอร์เวนในเลือดปกป้องคุณจากการโดนกัด!", PURPLE)
+			return
+		end
+		damage(plr, target, 25)
+		burst(target, Color3.fromRGB(160, 0, 20))
+		plr:SetAttribute("Blood", math.min(Config.BLOOD_MAX, (plr:GetAttribute("Blood") or 0) + 35))
+		target:SetAttribute("BittenAt", now())
+		addPoints(plr, 2)
+		notify(plr, "🩸 อร่อย... เลือด +35", RED)
+		notify(victim, "🧛 คุณโดนแวมไพร์กัด! ถ้าตายใน " .. Config.TRANSITION_WINDOW .. " วิ จะกลายเป็นแวมไพร์", RED)
+	end,
+
+	Compel = function(plr: Player, char: Model)
+		local target = nearest(char, 18, function(m)
+			return sideOf(m) ~= "Vampire" and not isTransformed(m)
+		end)
+		if not target then
+			notify(plr, "ไม่มีใครให้สะกดจิตแถวนี้ 👁")
+			return
+		end
+		local victim = Players:GetPlayerFromCharacter(target)
+		if vervainCount(target) > 0 then
+			notify(plr, "👁 สะกดจิตไม่ได้... คนนี้กินเวอร์เวนไว้", PURPLE)
+			notify(victim, "🌿 มีคนพยายามสะกดจิตคุณ แต่เวอร์เวนกันไว้ได้", PURPLE)
+			return
+		end
+		stun(target, 4)
+		burst(target, Color3.fromRGB(255, 255, 255))
+		notify(plr, "👁 \"อยู่นิ่งๆ แล้วลืมทุกอย่างซะ\"", RED)
+		notify(victim, "😵 คุณถูกสะกดจิต... ขยับไม่ได้!", RED)
+	end,
+}
+
+Abilities.Human = {
+	Stake = function(plr: Player, char: Model)
+		local target = nearest(char, 6, isSide("Vampire"))
+		if not target then
+			notify(plr, "ต้องเข้าใกล้แวมไพร์ก่อนถึงจะปักหลักได้ 🪵")
+			return
+		end
+		damage(plr, target, 35)
+		burst(target, Color3.fromRGB(120, 80, 40))
+		addPoints(plr, 2)
+		notify(plr, "🪵 ปักหลักเข้าเต็มๆ!", GREEN)
+		notify(Players:GetPlayerFromCharacter(target), "🪵 โดนหลักไม้ปักอก!", RED)
+	end,
+
+	Vervain = function(plr: Player, char: Model)
+		if (plr:GetAttribute("Vervain") or 0) <= 0 then
+			notify(plr, "ไม่มีเวอร์เวน ไปเก็บที่ทุ่งทางตะวันออกก่อน 🌿")
+			return
+		end
+		local target = nearest(char, 14, isSide("Vampire"))
+		if not target then
+			notify(plr, "ไม่มีแวมไพร์ในระยะ")
+			return
+		end
+		useVervain(char)
+		damage(plr, target, 15)
+		stun(target, 3)
+		burst(target, Color3.fromRGB(170, 90, 230))
+		addPoints(plr, 1)
+		notify(plr, "🌿 สาดเวอร์เวนโดน! แวมไพร์ชะงัก", GREEN)
+		notify(Players:GetPlayerFromCharacter(target), "🌿 โดนสาดเวอร์เวน! แสบผิวไปหมด", RED)
+	end,
+}
+
+Abilities.Werewolf = {
+	Claw = function(plr: Player, char: Model)
+		local target = nearest(char, 7, function(m)
+			return sideOf(m) ~= "Werewolf"
+		end)
+		if not target then
+			return
+		end
+		local wolf = isTransformed(char)
+		local targetIsVamp = sideOf(target) == "Vampire"
+		local amount = wolf and (targetIsVamp and 45 or 30) or 12
+		damage(plr, target, amount)
+		burst(target, Color3.fromRGB(200, 30, 30))
+		addPoints(plr, 1)
+		if wolf and targetIsVamp then
+			-- Werewolf venom: slowly kills a vampire.
+			target:SetAttribute("VenomUntil", now() + 10)
+			notify(plr, "🐺 กัดเข้าไปแล้ว! พิษหมาป่ากำลังทำงาน", GOLD)
+			notify(Players:GetPlayerFromCharacter(target), "☠️ โดนหมาป่ากัด! พิษกำลังกินร่าง...", RED)
+		end
+	end,
+}
+
+AbilityRemote.OnServerEvent:Connect(function(plr: Player, ability)
+	if typeof(ability) ~= "string" then
+		return
+	end
+	local char = plr.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health <= 0 then
+		return
+	end
+	if (char:GetAttribute("StunnedUntil") or 0) > now() then
+		return
+	end
+	local list = Abilities[getSide(plr)]
+	local handler = list and list[ability]
+	if handler and useCooldown(plr, ability) then
+		handler(plr, char)
+	end
+end)
+
+---------------------------------------------------------------- choosing a side
+local lastSwitch: { [Player]: number } = {}
+
+local function setSide(plr: Player, side: string)
+	plr:SetAttribute("Side", side)
+	plr.Team = teams[side]
+end
+
+ChooseSideRemote.OnServerEvent:Connect(function(plr: Player, side)
+	if typeof(side) ~= "string" or not Config.SideStats[side] then
+		return
+	end
+	if lastSwitch[plr] and now() - lastSwitch[plr] < 10 then
+		notify(plr, "รอสักครู่ก่อนเปลี่ยนฝั่งอีกครั้ง")
+		return
+	end
+	lastSwitch[plr] = now()
+	setSide(plr, side)
+	plr:LoadCharacter()
+end)
+
+---------------------------------------------------------------- map
+local map = MapBuilder.Build()
+
+for _, prompt in map.vervainPrompts do
+	local plant = prompt.Parent
+	prompt.Triggered:Connect(function(plr: Player)
+		local char = plr.Character
+		if not char then
+			return
+		end
+		if getSide(plr) == "Vampire" then
+			damage(nil, char, 10)
+			burst(char, Color3.fromRGB(170, 90, 230))
+			notify(plr, "🔥 แวมไพร์จับเวอร์เวนไม่ได้! มือไหม้", RED)
+			return
+		end
+		local count = plr:GetAttribute("Vervain") or 0
+		if count >= Config.MAX_VERVAIN then
+			notify(plr, "พกเวอร์เวนเต็มแล้ว (" .. Config.MAX_VERVAIN .. ")")
+			return
+		end
+		plr:SetAttribute("Vervain", count + 1)
+		notify(plr, "🌿 ได้เวอร์เวน +1 (กันโดนกัด/สะกดจิต และใช้สาดแวมไพร์ได้)", PURPLE)
+		prompt.Enabled = false
+		plant.Transparency = 1
+		task.delay(40, function()
+			prompt.Enabled = true
+			plant.Transparency = 0
+		end)
+	end)
+end
+
+map.ringPrompt.Triggered:Connect(function(plr: Player)
+	local char = plr.Character
+	if not char then
+		return
+	end
+	if getSide(plr) ~= "Vampire" then
+		notify(plr, "💍 แหวนวงนี้มีไว้ให้แวมไพร์เท่านั้น")
+		return
+	end
+	if char:GetAttribute("HasRing") then
+		notify(plr, "คุณสวมแหวนอยู่แล้ว")
+		return
+	end
+	char:SetAttribute("HasRing", true)
+	burst(char, Color3.fromRGB(90, 150, 255))
+	notify(plr, "💍 แม่มดร่ายมนต์ใส่แหวน... เดินกลางแดดได้แล้ว! (หายเมื่อตาย)", Color3.fromRGB(120, 170, 255))
+end)
+
+-- Points for finishing off townsfolk.
+NPCs.Folder.ChildAdded:Connect(function(model)
+	local hum = model:WaitForChild("Humanoid", 5)
+	if hum then
+		hum.Died:Connect(function()
+			local id = model:GetAttribute("LastAttacker")
+			addPoints(id and Players:GetPlayerByUserId(id), 3)
+		end)
+	end
+end)
+
+NPCs.Start(map.wanderPoints)
+
+---------------------------------------------------------------- players
+local function isDay()
+	return ReplicatedStorage:GetAttribute("IsDay") == true
+end
+local function isFullMoonNight()
+	return not isDay() and ReplicatedStorage:GetAttribute("FullMoon") == true
+end
+
+local function onCharacter(plr: Player, char: Model)
+	local hum = char:WaitForChild("Humanoid") :: Humanoid
+	local side = getSide(plr)
+	local stats = Config.SideStats[side]
+	hum.MaxHealth = stats.MaxHealth
+	hum.Health = stats.MaxHealth
+	hum.WalkSpeed = stats.WalkSpeed
+	plr:SetAttribute("Blood", Config.BLOOD_START)
+
+	if side == "Werewolf" and isFullMoonNight() then
+		task.delay(1, transform, char)
+	end
+
+	hum.Died:Connect(function()
+		local id = char:GetAttribute("LastAttacker")
+		local killer = id and Players:GetPlayerByUserId(id)
+		addPoints(killer, 10)
+		if killer and killer ~= plr then
+			notify(killer, "💀 คุณจัดการ " .. plr.DisplayName .. " ได้!", GOLD)
+		end
+		-- Transition: died with a fresh bite = wake up a vampire.
+		local bitten = char:GetAttribute("BittenAt")
+		if getSide(plr) == "Human" and bitten and now() - bitten < Config.TRANSITION_WINDOW then
+			setSide(plr, "Vampire")
+			notify(plr, "🧛 คุณตื่นขึ้นมา... หิวเลือด. ยินดีต้อนรับสู่ชีวิตแวมไพร์", RED)
+			notifyAll("🦇 " .. plr.DisplayName .. " กลายเป็นแวมไพร์แล้ว!", RED)
+		end
+	end)
+end
+
+local function onPlayer(plr: Player)
+	local stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+	local pts = Instance.new("IntValue")
+	pts.Name = "Points"
+	pts.Parent = stats
+	stats.Parent = plr
+
+	setSide(plr, "Human")
+	plr:SetAttribute("Vervain", 0)
+	plr.CharacterAdded:Connect(function(char)
+		onCharacter(plr, char)
+	end)
+	if plr.Character then
+		onCharacter(plr, plr.Character)
+	end
+end
+
+Players.PlayerAdded:Connect(onPlayer)
+for _, plr in Players:GetPlayers() do
+	task.spawn(onPlayer, plr)
+end
+
+Players.PlayerRemoving:Connect(function(plr)
+	cooldowns[plr] = nil
+	lastSwitch[plr] = nil
+end)
+
+---------------------------------------------------------------- sunlight, hunger, venom (every second)
+local sunParams = RaycastParams.new()
+sunParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function inSunlight(char: Model): boolean
+	local head = char:FindFirstChild("Head")
+	if not head then
+		return false
+	end
+	sunParams.FilterDescendantsInstances = { char, NPCs.Folder }
+	return workspace:Raycast(head.Position, Vector3.new(0, 400, 0), sunParams) == nil
+end
+
+local lastWarn: { [Player]: number } = {}
+local function warnOnce(plr: Player, text: string)
+	if not lastWarn[plr] or now() - lastWarn[plr] > 4 then
+		lastWarn[plr] = now()
+		notify(plr, text, RED)
+	end
+end
+
+task.spawn(function()
+	while true do
+		task.wait(1)
+		for _, plr in Players:GetPlayers() do
+			local char = plr.Character
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			if hum and hum.Health > 0 then
+				if getSide(plr) == "Vampire" then
+					local blood = math.max(0, (plr:GetAttribute("Blood") or 0) - Config.BLOOD_DRAIN)
+					plr:SetAttribute("Blood", blood)
+					if blood <= 0 then
+						hum:TakeDamage(4)
+						warnOnce(plr, "🩸 หิวเลือดจนร่างกายเริ่มแห้ง! ไปกัดใครสักคนเร็ว")
+					elseif blood > 50 then
+						hum.Health = math.min(hum.MaxHealth, hum.Health + 3) -- vampire healing
+					end
+
+					if isDay() and not char:GetAttribute("HasRing") and inSunlight(char) then
+						hum:TakeDamage(Config.SUN_DAMAGE)
+						local root = char:FindFirstChild("HumanoidRootPart")
+						if root and not root:FindFirstChild("SunFire") then
+							local fire = Instance.new("Fire")
+							fire.Name = "SunFire"
+							fire.Heat = 12
+							fire.Size = 6
+							fire.Parent = root
+							Debris:AddItem(fire, 1.2)
+						end
+						warnOnce(plr, "🔥 แดดเผา! หลบเข้าร่มหรือในตึก หรือไปหาแหวนที่ซากปรักหักพังของแม่มด")
+					end
+				end
+				if (char:GetAttribute("VenomUntil") or 0) > now() then
+					hum:TakeDamage(5)
+				end
+			end
+		end
+	end
+end)
+
+---------------------------------------------------------------- day / night
+local sky = Lighting:FindFirstChild("MoonSky") :: Sky
+local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
+local nightCount = 0
+
+ReplicatedStorage:SetAttribute("IsDay", true)
+ReplicatedStorage:SetAttribute("FullMoon", false)
+ReplicatedStorage:SetAttribute("Night", 0)
+
+local function onNightfall()
+	nightCount += 1
+	local full = (nightCount - 1) % Config.FULL_MOON_EVERY == 0
+	ReplicatedStorage:SetAttribute("Night", nightCount)
+	ReplicatedStorage:SetAttribute("FullMoon", full)
+	if sky then
+		sky.MoonAngularSize = full and 32 or 11
+	end
+	if atmo then
+		atmo.Color = full and Color3.fromRGB(150, 150, 190) or Color3.fromRGB(120, 120, 150)
+	end
+	if full then
+		notifyAll("🌕 คืนพระจันทร์เต็มดวง! มนุษย์หมาป่ากำลังกลายร่าง... ระวังตัวด้วย", GOLD)
+		for _, plr in Players:GetPlayers() do
+			if getSide(plr) == "Werewolf" and plr.Character then
+				transform(plr.Character)
+			end
+		end
+	else
+		notifyAll("🌙 ค่ำแล้ว... แวมไพร์ออกล่าได้อย่างอิสระ", PURPLE)
+	end
+end
+
+local function onDawn()
+	notifyAll("☀️ รุ่งเช้า! แวมไพร์ที่ไม่มีแหวนต้องหลบแดด", GOLD)
+	if atmo then
+		atmo.Color = Color3.fromRGB(170, 175, 200)
+	end
+	for _, plr in Players:GetPlayers() do
+		if plr.Character then
+			untransform(plr.Character)
+		end
+	end
+end
+
+RunService.Heartbeat:Connect(function(dt)
+	local t = (Lighting.ClockTime + dt * 24 / Config.DAY_CYCLE_SECONDS) % 24
+	Lighting.ClockTime = t
+	local dayNow = t >= 6 and t < 18
+	if dayNow ~= isDay() then
+		ReplicatedStorage:SetAttribute("IsDay", dayNow)
+		if dayNow then
+			onDawn()
+		else
+			onNightfall()
+		end
+	end
+end)
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">MapBuilder</string><ProtectedString name="Source"><![CDATA[-- Builds the whole town of Moonlit Falls out of parts, plus the lighting.
+local Lighting = game:GetService("Lighting")
+
+local MapBuilder = {}
+
+local rng = Random.new(1864)
+local mapFolder: Folder
+
+local function part(props)
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	local parent = props.Parent or mapFolder
+	props.Parent = nil
+	for k, v in props do
+		p[k] = v
+	end
+	p.Parent = parent
+	return p
+end
+
+local function signOn(target: BasePart, face: Enum.NormalId, text: string, textColor: Color3?)
+	local sg = Instance.new("SurfaceGui")
+	sg.Face = face
+	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	sg.PixelsPerStud = 40
+	sg.Parent = target
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextScaled = true
+	label.Font = Enum.Font.Fantasy
+	label.TextColor3 = textColor or Color3.fromRGB(255, 235, 200)
+	label.Parent = sg
+end
+
+-- Hollow building with a door. Built facing +Z, then rotated by `yaw`.
+local function building(name, center: Vector3, yaw: number, w, d, h, wallColor: Color3, roofColor: Color3, signText: string?)
+	local model = Instance.new("Model")
+	model.Name = name
+	model.Parent = mapFolder
+	local t = 1
+	local mid = Vector3.new(0, h / 2, 0)
+	local doorW, doorH = 6, 9
+	local sideW = (w - doorW) / 2
+
+	local function wall(size, pos, mat)
+		return part({
+			Size = size,
+			Position = pos,
+			Color = wallColor,
+			Material = mat or Enum.Material.Brick,
+			Parent = model,
+		})
+	end
+
+	wall(Vector3.new(w, h, t), mid + Vector3.new(0, 0, -d / 2))
+	wall(Vector3.new(t, h, d), mid + Vector3.new(-w / 2, 0, 0))
+	wall(Vector3.new(t, h, d), mid + Vector3.new(w / 2, 0, 0))
+	wall(Vector3.new(sideW, h, t), mid + Vector3.new(-(doorW / 2 + sideW / 2), 0, d / 2))
+	wall(Vector3.new(sideW, h, t), mid + Vector3.new(doorW / 2 + sideW / 2, 0, d / 2))
+	wall(Vector3.new(doorW, h - doorH, t), Vector3.new(0, doorH + (h - doorH) / 2, d / 2))
+
+	part({
+		Name = "Roof",
+		Size = Vector3.new(w + 3, 1.2, d + 3),
+		Position = Vector3.new(0, h + 0.6, 0),
+		Color = roofColor,
+		Material = Enum.Material.Slate,
+		Parent = model,
+	})
+	part({
+		Name = "Floor",
+		Size = Vector3.new(w - 1, 0.3, d - 1),
+		Position = Vector3.new(0, 0.15, 0),
+		Color = Color3.fromRGB(110, 75, 50),
+		Material = Enum.Material.WoodPlanks,
+		Parent = model,
+	})
+	-- Warm light inside so it feels lived in at night.
+	local lamp = part({
+		Name = "Lamp",
+		Size = Vector3.new(1, 1, 1),
+		Position = Vector3.new(0, h - 1.5, 0),
+		Color = Color3.fromRGB(255, 200, 120),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+		Parent = model,
+	})
+	local light = Instance.new("PointLight")
+	light.Range = math.max(w, d)
+	light.Brightness = 1.5
+	light.Color = Color3.fromRGB(255, 190, 120)
+	light.Parent = lamp
+
+	if signText then
+		local board = part({
+			Name = "Sign",
+			Size = Vector3.new(math.min(w - 4, 22), 3, 0.4),
+			Position = Vector3.new(0, doorH + 2, d / 2 + 0.8),
+			Color = Color3.fromRGB(40, 25, 20),
+			Material = Enum.Material.Wood,
+			Parent = model,
+		})
+		signOn(board, Enum.NormalId.Back, signText)
+	end
+
+	model.WorldPivot = CFrame.new()
+	model:PivotTo(CFrame.new(center) * CFrame.Angles(0, yaw, 0))
+	return model
+end
+
+local function tree(pos: Vector3)
+	local h = rng:NextNumber(14, 26)
+	part({
+		Name = "Trunk",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(h, 2.2, 2.2),
+		CFrame = CFrame.new(pos + Vector3.new(0, h / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = Color3.fromRGB(70, 50, 35),
+		Material = Enum.Material.Wood,
+	})
+	local r = rng:NextNumber(10, 16)
+	part({
+		Name = "Leaves",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(r, r, r),
+		Position = pos + Vector3.new(0, h, 0),
+		Color = Color3.fromRGB(25 + rng:NextInteger(0, 20), 55 + rng:NextInteger(0, 25), 30),
+		Material = Enum.Material.Grass,
+	})
+end
+
+local function streetLamp(pos: Vector3)
+	part({
+		Size = Vector3.new(0.6, 12, 0.6),
+		Position = pos + Vector3.new(0, 6, 0),
+		Color = Color3.fromRGB(30, 30, 30),
+		Material = Enum.Material.Metal,
+	})
+	local bulb = part({
+		Size = Vector3.new(1.4, 1.4, 1.4),
+		Position = pos + Vector3.new(0, 12.5, 0),
+		Color = Color3.fromRGB(255, 220, 150),
+		Material = Enum.Material.Neon,
+		Shape = Enum.PartType.Ball,
+	})
+	local l = Instance.new("PointLight")
+	l.Range = 24
+	l.Brightness = 2
+	l.Color = Color3.fromRGB(255, 210, 140)
+	l.Parent = bulb
+end
+
+local function setupLighting()
+	Lighting.ClockTime = 8
+	Lighting.Brightness = 2
+	Lighting.Ambient = Color3.fromRGB(40, 40, 55)
+	Lighting.OutdoorAmbient = Color3.fromRGB(90, 90, 110)
+	Lighting.GlobalShadows = true
+
+	local atmo = Instance.new("Atmosphere")
+	atmo.Density = 0.38
+	atmo.Haze = 2
+	atmo.Glare = 0.2
+	atmo.Color = Color3.fromRGB(170, 175, 200)
+	atmo.Decay = Color3.fromRGB(80, 70, 100)
+	atmo.Parent = Lighting
+
+	local sky = Instance.new("Sky")
+	sky.Name = "MoonSky"
+	sky.MoonAngularSize = 11
+	sky.StarCount = 4000
+	sky.Parent = Lighting
+end
+
+function MapBuilder.Build()
+	mapFolder = Instance.new("Folder")
+	mapFolder.Name = "MoonlitFalls"
+	mapFolder.Parent = workspace
+
+	setupLighting()
+
+	-- Ground
+	part({
+		Name = "Ground",
+		Size = Vector3.new(800, 2, 800),
+		Position = Vector3.new(0, -1, 0),
+		Color = Color3.fromRGB(55, 80, 45),
+		Material = Enum.Material.Grass,
+	})
+
+	-- Town square
+	part({
+		Name = "Square",
+		Size = Vector3.new(70, 0.2, 70),
+		Position = Vector3.new(0, 0.1, 0),
+		Color = Color3.fromRGB(120, 115, 110),
+		Material = Enum.Material.Cobblestone,
+	})
+	-- Roads
+	part({ Name = "MainStreet", Size = Vector3.new(400, 0.15, 14), Position = Vector3.new(0, 0.08, 0), Color = Color3.fromRGB(45, 45, 50), Material = Enum.Material.Asphalt })
+	part({ Name = "CrossStreet", Size = Vector3.new(14, 0.15, 300), Position = Vector3.new(0, 0.08, -60), Color = Color3.fromRGB(45, 45, 50), Material = Enum.Material.Asphalt })
+
+	-- Fountain in the square
+	part({ Name = "FountainBase", Shape = Enum.PartType.Cylinder, Size = Vector3.new(2, 16, 16), CFrame = CFrame.new(0, 1, 18) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(150, 150, 155), Material = Enum.Material.Marble })
+	local water = part({ Name = "FountainWater", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 14, 14), CFrame = CFrame.new(0, 2.05, 18) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(60, 110, 160), Material = Enum.Material.Glass, Transparency = 0.3, CanCollide = false })
+	water.Reflectance = 0.3
+	part({ Name = "FountainPillar", Size = Vector3.new(2, 6, 2), Position = Vector3.new(0, 4, 18), Color = Color3.fromRGB(160, 160, 165), Material = Enum.Material.Marble })
+
+	-- Clock tower
+	local tower = part({ Name = "ClockTower", Size = Vector3.new(10, 44, 10), Position = Vector3.new(0, 22, -22), Color = Color3.fromRGB(130, 90, 70), Material = Enum.Material.Brick })
+	signOn(tower, Enum.NormalId.Back, "🕰\nMOONLIT FALLS\nest. 1864")
+	part({ Name = "TowerTop", Size = Vector3.new(12, 2, 12), Position = Vector3.new(0, 45, -22), Color = Color3.fromRGB(50, 50, 60), Material = Enum.Material.Slate })
+
+	-- Town buildings around the square
+	building("Moonlit Grill", Vector3.new(-48, 0, 50), math.pi, 32, 22, 14, Color3.fromRGB(120, 60, 45), Color3.fromRGB(40, 35, 35), "🍔 MOONLIT GRILL")
+	building("Old Library", Vector3.new(48, 0, 50), math.pi, 30, 22, 16, Color3.fromRGB(140, 130, 115), Color3.fromRGB(60, 50, 45), "📚 OLD LIBRARY")
+	building("Sheriff Office", Vector3.new(-48, 0, -55), 0, 28, 20, 13, Color3.fromRGB(150, 150, 140), Color3.fromRGB(30, 40, 60), "⭐ SHERIFF")
+	building("Falls High School", Vector3.new(52, 0, -58), 0, 40, 24, 18, Color3.fromRGB(150, 70, 60), Color3.fromRGB(40, 40, 40), "🎓 FALLS HIGH")
+	building("Ravencroft Boarding House", Vector3.new(0, 0, -180), 0, 46, 30, 22, Color3.fromRGB(95, 85, 75), Color3.fromRGB(30, 25, 25), "🦇 RAVENCROFT HOUSE")
+
+	for _, p in { Vector3.new(-30, 0, -30), Vector3.new(30, 0, -30), Vector3.new(-30, 0, 30), Vector3.new(30, 0, 30), Vector3.new(-90, 0, 9), Vector3.new(90, 0, 9), Vector3.new(9, 0, -110) } do
+		streetLamp(p)
+	end
+
+	-- Old cemetery (west)
+	local cx, cz = -150, 0
+	part({ Name = "CemeteryGround", Size = Vector3.new(70, 0.2, 60), Position = Vector3.new(cx, 0.1, cz), Color = Color3.fromRGB(60, 65, 50), Material = Enum.Material.Ground })
+	for i = -3, 3 do
+		for j = -2, 2 do
+			local stone = part({
+				Name = "Tombstone",
+				Size = Vector3.new(3, rng:NextNumber(3, 5), 0.8),
+				Position = Vector3.new(cx + i * 8, 2, cz + j * 10),
+				Color = Color3.fromRGB(110, 110, 115),
+				Material = Enum.Material.Slate,
+			})
+			stone.Orientation = Vector3.new(rng:NextNumber(-6, 6), 90, rng:NextNumber(-6, 6))
+		end
+	end
+	local crypt = building("Founders Crypt", Vector3.new(cx - 28, 0, cz), math.pi / 2, 14, 12, 10, Color3.fromRGB(90, 90, 95), Color3.fromRGB(50, 50, 55), "⚰ CRYPT")
+	crypt:SetAttribute("Shade", true)
+
+	-- Vervain field (east, at the forest edge). Purple flowers with a pick-up prompt.
+	local vervainPrompts = {}
+	for i = 1, 10 do
+		local pos = Vector3.new(130 + rng:NextNumber(-18, 18), 0, 80 + rng:NextNumber(-18, 18))
+		local plant = part({
+			Name = "Vervain",
+			Size = Vector3.new(1.6, 2.2, 1.6),
+			Position = pos + Vector3.new(0, 1.1, 0),
+			Color = Color3.fromRGB(150, 90, 210),
+			Material = Enum.Material.Neon,
+			Shape = Enum.PartType.Ball,
+			CanCollide = false,
+		})
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "เก็บเวอร์เวน"
+		prompt.ObjectText = "🌿 Vervain"
+		prompt.HoldDuration = 0.6
+		prompt.MaxActivationDistance = 8
+		prompt.Parent = plant
+		table.insert(vervainPrompts, prompt)
+	end
+	local fieldSign = part({ Size = Vector3.new(10, 3, 0.4), Position = Vector3.new(105, 3, 80), Color = Color3.fromRGB(40, 25, 20), Material = Enum.Material.Wood })
+	fieldSign.Orientation = Vector3.new(0, 90, 0)
+	signOn(fieldSign, Enum.NormalId.Front, "🌿 VERVAIN FIELD")
+	signOn(fieldSign, Enum.NormalId.Back, "🌿 VERVAIN FIELD")
+
+	-- Witch ruins deep in the woods: a daylight ring for vampires.
+	local wx, wz = -120, -220
+	for i = 0, 7 do
+		local a = i / 8 * math.pi * 2
+		part({
+			Name = "RuinStone",
+			Size = Vector3.new(3, rng:NextNumber(5, 9), 3),
+			Position = Vector3.new(wx + math.cos(a) * 14, 3, wz + math.sin(a) * 14),
+			Color = Color3.fromRGB(85, 85, 90),
+			Material = Enum.Material.Rock,
+		})
+	end
+	local altar = part({ Name = "Altar", Size = Vector3.new(6, 3, 4), Position = Vector3.new(wx, 1.5, wz), Color = Color3.fromRGB(70, 65, 70), Material = Enum.Material.Rock })
+	local ring = part({
+		Name = "DaylightRing",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.3, 1.4, 1.4),
+		Position = Vector3.new(wx, 3.4, wz),
+		Color = Color3.fromRGB(80, 140, 255),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+	})
+	local glow = Instance.new("PointLight")
+	glow.Color = Color3.fromRGB(90, 150, 255)
+	glow.Range = 18
+	glow.Brightness = 3
+	glow.Parent = ring
+	local ringPrompt = Instance.new("ProximityPrompt")
+	ringPrompt.ActionText = "สวมแหวนกันแดด"
+	ringPrompt.ObjectText = "💍 Daylight Ring"
+	ringPrompt.HoldDuration = 3
+	ringPrompt.MaxActivationDistance = 10
+	ringPrompt.Parent = altar
+	local ruinSign = part({ Size = Vector3.new(10, 3, 0.4), Position = Vector3.new(wx, 3, wz + 22), Color = Color3.fromRGB(40, 25, 20), Material = Enum.Material.Wood })
+	signOn(ruinSign, Enum.NormalId.Back, "🔮 WITCH RUINS")
+
+	-- Forest all around town, leaving clearings for the landmarks.
+	local clearings = {
+		{ Vector3.new(0, 0, 0), 115 },
+		{ Vector3.new(cx, 0, cz), 50 },
+		{ Vector3.new(130, 0, 80), 30 },
+		{ Vector3.new(wx, 0, wz), 26 },
+		{ Vector3.new(0, 0, -180), 36 },
+		{ Vector3.new(0, 0, -100), 14 },
+	}
+	local placed = 0
+	while placed < 220 do
+		local pos = Vector3.new(rng:NextNumber(-380, 380), 0, rng:NextNumber(-380, 380))
+		local ok = math.abs(pos.Z) > 10 and math.abs(pos.X) > 10 -- keep roads clear
+		for _, c in clearings do
+			if (pos - c[1]).Magnitude < c[2] then
+				ok = false
+				break
+			end
+		end
+		if ok then
+			tree(pos)
+			placed += 1
+		end
+	end
+
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Anchored = true
+	spawn.Size = Vector3.new(10, 0.4, 10)
+	spawn.Position = Vector3.new(0, 0.3, 6)
+	spawn.Transparency = 1
+	spawn.CanCollide = false
+	spawn.Neutral = true
+	spawn.Duration = 3
+	spawn.Parent = mapFolder
+
+	-- Where townsfolk like to walk.
+	local wanderPoints = {}
+	for _ = 1, 40 do
+		local a = rng:NextNumber(0, math.pi * 2)
+		local r = rng:NextNumber(5, 80)
+		table.insert(wanderPoints, Vector3.new(math.cos(a) * r, 0, math.sin(a) * r))
+	end
+
+	return {
+		wanderPoints = wanderPoints,
+		vervainPrompts = vervainPrompts,
+		ringPrompt = ringPrompt,
+	}
+end
+
+return MapBuilder
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000008"><Properties><string name="Name">NPCs</string><ProtectedString name="Source"><![CDATA[-- Townsfolk who wander the square. Vampires feed on them, some secretly carry vervain.
+local Players = game:GetService("Players")
+
+local NPCs = {}
+
+NPCs.Folder = Instance.new("Folder")
+NPCs.Folder.Name = "Townsfolk"
+NPCs.Folder.Parent = workspace
+
+local COUNT = 12
+local RESPAWN_SECONDS = 15
+local VERVAIN_CHANCE = 0.25
+
+local NAMES = {
+	"Mrs. Hollis", "Pastor Wren", "Coach Barrow", "Nora the Barista", "Old Man Fitch",
+	"Deputy Lane", "Ivy Marsh", "Tobias Crane", "Lucy Pell", "Dr. Ashford",
+	"Mayor Quill", "Gwen Harlow", "Felix Rowe", "Martha Bell",
+}
+local SKINS = {
+	Color3.fromRGB(255, 220, 190), Color3.fromRGB(234, 184, 146), Color3.fromRGB(198, 134, 94),
+	Color3.fromRGB(141, 85, 54), Color3.fromRGB(96, 60, 40),
+}
+local SHIRTS = {
+	Color3.fromRGB(120, 30, 40), Color3.fromRGB(40, 60, 110), Color3.fromRGB(60, 90, 60),
+	Color3.fromRGB(200, 190, 170), Color3.fromRGB(30, 30, 35), Color3.fromRGB(110, 80, 140),
+}
+local PANTS = { Color3.fromRGB(35, 40, 60), Color3.fromRGB(60, 50, 40), Color3.fromRGB(25, 25, 25) }
+
+local rng = Random.new()
+local wanderPoints: { Vector3 } = {}
+
+local function pick(list)
+	return list[rng:NextInteger(1, #list)]
+end
+
+local function isStunned(model: Model)
+	return (model:GetAttribute("StunnedUntil") or 0) > workspace:GetServerTimeNow()
+end
+
+local function makeNPC(): Model?
+	local desc = Instance.new("HumanoidDescription")
+	local skin = pick(SKINS)
+	desc.HeadColor = skin
+	desc.LeftArmColor = skin
+	desc.RightArmColor = skin
+	desc.TorsoColor = pick(SHIRTS)
+	local pants = pick(PANTS)
+	desc.LeftLegColor = pants
+	desc.RightLegColor = pants
+
+	local ok, model = pcall(function()
+		return Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+	end)
+	if not ok or not model then
+		warn("[Townsfolk] could not create NPC:", model)
+		return nil
+	end
+
+	local name = pick(NAMES)
+	model.Name = name
+	model:SetAttribute("NPC", true)
+	if rng:NextNumber() < VERVAIN_CHANCE then
+		model:SetAttribute("Vervain", 1)
+	end
+
+	local hum = model:FindFirstChildOfClass("Humanoid")
+	hum.DisplayName = name
+	hum.WalkSpeed = 10
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+
+	model:PivotTo(CFrame.new(pick(wanderPoints) + Vector3.new(0, 4, 0)))
+	model.Parent = NPCs.Folder
+
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if root then
+		root:SetNetworkOwner(nil)
+	end
+
+	-- Wander around town.
+	task.spawn(function()
+		while model.Parent and hum.Health > 0 do
+			if not isStunned(model) then
+				hum:MoveTo(pick(wanderPoints))
+			end
+			task.wait(rng:NextNumber(4, 9))
+		end
+	end)
+
+	hum.Died:Connect(function()
+		task.delay(RESPAWN_SECONDS, function()
+			model:Destroy()
+			makeNPC()
+		end)
+	end)
+
+	return model
+end
+
+function NPCs.Start(points: { Vector3 })
+	wanderPoints = points
+	for _ = 1, COUNT do
+		makeNPC()
+	end
+end
+
+return NPCs
+]]></ProtectedString></Properties></Item>
+</Item>
+</Item>
+<Item class="StarterPlayer" referent="RBX00000014"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000013"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="Folder" referent="RBX00000012"><Properties><string name="Name">Client</string></Properties><Item class="LocalScript" referent="RBX00000011"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[-- Moonlit Falls: HUD, side picker, keyboard + on-screen buttons, vampire dash.
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+
+local player = Players.LocalPlayer
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local AbilityRemote = Remotes:WaitForChild("Ability")
+local ChooseSideRemote = Remotes:WaitForChild("ChooseSide")
+local NotifyRemote = Remotes:WaitForChild("Notify")
+
+local ABILITIES = {
+	Human = {
+		{ id = "Stake", key = Enum.KeyCode.E, label = "🪵 ปักหลัก", hint = "E" },
+		{ id = "Vervain", key = Enum.KeyCode.R, label = "🌿 สาดเวอร์เวน", hint = "R" },
+	},
+	Vampire = {
+		{ id = "Dash", key = Enum.KeyCode.Q, label = "💨 พุ่ง", hint = "Q" },
+		{ id = "Bite", key = Enum.KeyCode.E, label = "🩸 กัด", hint = "E" },
+		{ id = "Compel", key = Enum.KeyCode.R, label = "👁 สะกดจิต", hint = "R" },
+	},
+	Werewolf = {
+		{ id = "Dash", key = Enum.KeyCode.Q, label = "💨 กระโจน", hint = "Q", wolfOnly = true },
+		{ id = "Claw", key = Enum.KeyCode.E, label = "🐾 ข่วน/กัด", hint = "E" },
+	},
+}
+
+---------------------------------------------------------------- ui helpers
+local function make(class: string, props: { [string]: any }, parent: Instance?)
+	local inst = Instance.new(class)
+	for k, v in props do
+		inst[k] = v
+	end
+	inst.Parent = parent
+	return inst
+end
+local function corner(parent, r)
+	make("UICorner", { CornerRadius = UDim.new(0, r or 10) }, parent)
+end
+
+local gui = make("ScreenGui", { Name = "MoonlitHUD", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, player:WaitForChild("PlayerGui"))
+
+-- Status panel (top-left)
+local panel = make("Frame", {
+	Position = UDim2.fromOffset(12, 12),
+	Size = UDim2.fromOffset(240, 112),
+	BackgroundColor3 = Color3.fromRGB(15, 10, 20),
+	BackgroundTransparency = 0.25,
+}, gui)
+corner(panel)
+make("UIStroke", { Color = Color3.fromRGB(120, 20, 40), Thickness = 1.5 }, panel)
+make("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 8) }, panel)
+make("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, panel)
+
+local function line(order, size)
+	return make("TextLabel", {
+		LayoutOrder = order,
+		Size = UDim2.new(1, 0, 0, size or 18),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold,
+		TextSize = size or 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Color3.fromRGB(235, 225, 230),
+		Text = "",
+	}, panel)
+end
+local titleLbl = line(1, 16)
+titleLbl.Text = "🦇 " .. Config.GAME_NAME
+titleLbl.TextColor3 = Color3.fromRGB(220, 60, 80)
+local sideLbl = line(2)
+local timeLbl = line(3)
+local extraLbl = line(5)
+
+local bloodBack = make("Frame", { LayoutOrder = 4, Size = UDim2.new(1, 0, 0, 12), BackgroundColor3 = Color3.fromRGB(50, 20, 25) }, panel)
+corner(bloodBack, 6)
+local bloodFill = make("Frame", { Size = UDim2.fromScale(0.6, 1), BackgroundColor3 = Color3.fromRGB(190, 15, 35) }, bloodBack)
+corner(bloodFill, 6)
+
+-- Change-side button (top-right)
+local switchBtn = make("TextButton", {
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -12, 0, 12),
+	Size = UDim2.fromOffset(120, 36),
+	BackgroundColor3 = Color3.fromRGB(60, 15, 25),
+	TextColor3 = Color3.new(1, 1, 1),
+	Font = Enum.Font.GothamBold,
+	TextSize = 14,
+	Text = "🔄 เปลี่ยนฝั่ง",
+}, gui)
+corner(switchBtn)
+
+-- Notifications (center)
+local toast = make("TextLabel", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 70),
+	Size = UDim2.new(0.8, 0, 0, 40),
+	BackgroundColor3 = Color3.fromRGB(10, 5, 10),
+	BackgroundTransparency = 1,
+	TextTransparency = 1,
+	TextColor3 = Color3.new(1, 1, 1),
+	Font = Enum.Font.GothamBold,
+	TextScaled = true,
+	Text = "",
+}, gui)
+corner(toast)
+make("UITextSizeConstraint", { MaxTextSize = 22 }, toast)
+make("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, toast)
+
+local toastId = 0
+local function showToast(text: string, color: Color3?)
+	toastId += 1
+	local id = toastId
+	toast.Text = text
+	toast.TextColor3 = color or Color3.new(1, 1, 1)
+	toast.TextTransparency = 0
+	toast.BackgroundTransparency = 0.35
+	task.delay(3.2, function()
+		if id == toastId then
+			TweenService:Create(toast, TweenInfo.new(0.5), { TextTransparency = 1, BackgroundTransparency = 1 }):Play()
+		end
+	end)
+end
+NotifyRemote.OnClientEvent:Connect(showToast)
+
+---------------------------------------------------------------- side picker
+local menu = make("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.new(0.92, 0, 0, 330),
+	BackgroundColor3 = Color3.fromRGB(12, 6, 12),
+	BackgroundTransparency = 0.1,
+}, gui)
+make("UISizeConstraint", { MaxSize = Vector2.new(560, 400) }, menu)
+corner(menu, 14)
+make("UIStroke", { Color = Color3.fromRGB(150, 20, 40), Thickness = 2 }, menu)
+make("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14), PaddingTop = UDim.new(0, 12), PaddingBottom = UDim.new(0, 12) }, menu)
+make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }, menu)
+make("TextLabel", {
+	LayoutOrder = 0,
+	Size = UDim2.new(1, 0, 0, 34),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.Fantasy,
+	TextScaled = true,
+	TextColor3 = Color3.fromRGB(230, 50, 70),
+	Text = "🌙 MOONLIT FALLS — เลือกชะตาของคุณ",
+}, menu)
+
+for i, side in { "Human", "Vampire", "Werewolf" } do
+	local info = Config.SideInfo[side]
+	local btn = make("TextButton", {
+		LayoutOrder = i,
+		Size = UDim2.new(1, 0, 0, 78),
+		BackgroundColor3 = info.color:Lerp(Color3.new(0, 0, 0), 0.55),
+		AutoButtonColor = true,
+		Text = "",
+	}, menu)
+	corner(btn)
+	make("UIStroke", { Color = info.color, Thickness = 1.5 }, btn)
+	make("TextLabel", {
+		Position = UDim2.fromOffset(12, 6),
+		Size = UDim2.new(1, -24, 0, 30),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBlack,
+		TextSize = 22,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = info.color:Lerp(Color3.new(1, 1, 1), 0.3),
+		Text = info.title,
+	}, btn)
+	make("TextLabel", {
+		Position = UDim2.fromOffset(12, 38),
+		Size = UDim2.new(1, -24, 0, 34),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.Gotham,
+		TextSize = 14,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = Color3.fromRGB(220, 215, 220),
+		Text = info.desc,
+	}, btn)
+	btn.Activated:Connect(function()
+		ChooseSideRemote:FireServer(side)
+		menu.Visible = false
+	end)
+end
+
+switchBtn.Activated:Connect(function()
+	menu.Visible = not menu.Visible
+end)
+
+---------------------------------------------------------------- abilities
+local lastUsed: { [string]: number } = {}
+local buttonsFrame = make("Frame", {
+	AnchorPoint = Vector2.new(1, 1),
+	Position = UDim2.new(1, -12, 1, -110),
+	Size = UDim2.fromOffset(150, 200),
+	BackgroundTransparency = 1,
+}, gui)
+make("UIListLayout", {
+	Padding = UDim.new(0, 8),
+	VerticalAlignment = Enum.VerticalAlignment.Bottom,
+	SortOrder = Enum.SortOrder.LayoutOrder,
+}, buttonsFrame)
+
+local buttons: { [string]: TextButton } = {}
+
+local function character()
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if hum and hum.Health > 0 then
+		return char, hum
+	end
+	return nil, nil
+end
+
+local function dash()
+	local char, hum = character()
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local att = root and root:FindFirstChild("RootAttachment")
+	if not att or hum.WalkSpeed == 0 then
+		return
+	end
+	local dir = hum.MoveDirection.Magnitude > 0.1 and hum.MoveDirection or root.CFrame.LookVector
+	dir = Vector3.new(dir.X, 0, dir.Z).Unit
+	local lv = Instance.new("LinearVelocity")
+	lv.Attachment0 = att
+	lv.MaxForce = 1e6
+	lv.RelativeTo = Enum.ActuatorRelativeTo.World
+	lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
+	lv.PrimaryTangentAxis = Vector3.new(1, 0, 0)
+	lv.SecondaryTangentAxis = Vector3.new(0, 0, 1)
+	lv.PlaneVelocity = Vector2.new(dir.X, dir.Z) * 95
+	lv.Parent = root
+	Debris:AddItem(lv, 0.28)
+end
+
+local function useAbility(a)
+	local char = character()
+	if not char then
+		return
+	end
+	local cd = Config.Cooldowns[a.id] or 1
+	if os.clock() - (lastUsed[a.id] or -99) < cd then
+		return
+	end
+	if a.wolfOnly and not char:GetAttribute("Transformed") then
+		showToast("กระโจนได้เฉพาะตอนกลายร่างเป็นหมาป่า 🌕")
+		return
+	end
+	lastUsed[a.id] = os.clock()
+	if a.id == "Dash" then
+		dash()
+	else
+		AbilityRemote:FireServer(a.id)
+	end
+end
+
+local function currentSide(): string
+	return player:GetAttribute("Side") or "Human"
+end
+
+local function rebuildButtons()
+	for _, b in buttons do
+		b:Destroy()
+	end
+	table.clear(buttons)
+	for i, a in ABILITIES[currentSide()] do
+		local b = make("TextButton", {
+			LayoutOrder = i,
+			Size = UDim2.new(1, 0, 0, 52),
+			BackgroundColor3 = Color3.fromRGB(35, 10, 20),
+			BackgroundTransparency = 0.15,
+			TextColor3 = Color3.new(1, 1, 1),
+			Font = Enum.Font.GothamBold,
+			TextSize = 16,
+			Text = a.label,
+			AutoButtonColor = true,
+		}, buttonsFrame)
+		corner(b, 12)
+		make("UIStroke", { Color = Config.SideInfo[currentSide()].color, Thickness = 1.5 }, b)
+		b:SetAttribute("BaseText", a.label .. (UserInputService.KeyboardEnabled and ("  [" .. a.hint .. "]") or ""))
+		b.Activated:Connect(function()
+			useAbility(a)
+		end)
+		buttons[a.id] = b
+	end
+end
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then
+		return
+	end
+	for _, a in ABILITIES[currentSide()] do
+		if input.KeyCode == a.key then
+			useAbility(a)
+		end
+	end
+end)
+
+player:GetAttributeChangedSignal("Side"):Connect(rebuildButtons)
+rebuildButtons()
+
+---------------------------------------------------------------- night vision for vampires
+local cc = Instance.new("ColorCorrectionEffect")
+cc.Name = "MoonlitVision"
+cc.Parent = Lighting
+
+---------------------------------------------------------------- per-frame HUD
+RunService.RenderStepped:Connect(function()
+	local side = currentSide()
+	local info = Config.SideInfo[side]
+	local char = player.Character
+	local wolf = char and char:GetAttribute("Transformed")
+	sideLbl.Text = "ฝั่ง: " .. info.title .. (wolf and " (ร่างหมาป่า)" or "")
+	sideLbl.TextColor3 = info.color:Lerp(Color3.new(1, 1, 1), 0.35)
+
+	local isDay = ReplicatedStorage:GetAttribute("IsDay")
+	local clock = Lighting.ClockTime
+	local hh = math.floor(clock)
+	local mm = math.floor((clock - hh) * 60)
+	local phase = isDay and "☀️ กลางวัน" or (ReplicatedStorage:GetAttribute("FullMoon") and "🌕 คืนจันทร์เต็มดวง" or "🌙 กลางคืน")
+	timeLbl.Text = string.format("%s  %02d:%02d", phase, hh, mm)
+
+	local blood = player:GetAttribute("Blood") or 0
+	bloodBack.Visible = side == "Vampire"
+	bloodFill.Size = UDim2.fromScale(math.clamp(blood / Config.BLOOD_MAX, 0, 1), 1)
+
+	if side == "Vampire" then
+		local ring = char and char:GetAttribute("HasRing")
+		extraLbl.Text = string.format("🩸 เลือด %d   %s", blood, ring and "💍 มีแหวน" or "⚠️ ไม่มีแหวน")
+	else
+		extraLbl.Text = string.format("🌿 เวอร์เวน x%d", player:GetAttribute("Vervain") or 0)
+	end
+
+	-- Cooldown display on buttons
+	for _, a in ABILITIES[side] do
+		local b = buttons[a.id]
+		if b then
+			local left = (Config.Cooldowns[a.id] or 1) - (os.clock() - (lastUsed[a.id] or -99))
+			if left > 0 then
+				b.Text = string.format("%s (%.1f)", a.label, left)
+				b.BackgroundTransparency = 0.55
+			else
+				b.Text = b:GetAttribute("BaseText")
+				b.BackgroundTransparency = 0.15
+			end
+		end
+	end
+
+	-- Vampires see better at night, wolves see the world warmer under a full moon.
+	if side == "Vampire" and not isDay then
+		cc.Brightness = 0.12
+		cc.Saturation = -0.25
+		cc.TintColor = Color3.fromRGB(255, 225, 230)
+	elseif wolf then
+		cc.Brightness = 0.05
+		cc.Saturation = 0.1
+		cc.TintColor = Color3.fromRGB(255, 235, 200)
+	else
+		cc.Brightness = 0
+		cc.Saturation = 0
+		cc.TintColor = Color3.new(1, 1, 1)
+	end
+end)
+]]></ProtectedString></Properties></Item>
+</Item>
+</Item>
+</Item>
+<Item class="Teams" referent="RBX00000015"><Properties><string name="Name">Teams</string></Properties></Item>
+</roblox>
