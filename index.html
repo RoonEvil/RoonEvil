@@ -69,6 +69,13 @@
   @keyframes alarm { from { opacity: 0; } to { opacity: 1; } }
   .cursor.tired svg { animation: droop 1.4s ease-in-out infinite; transform-origin: 2px 2px; }
   @keyframes droop { 50% { transform: rotate(18deg) translateY(3px); } }
+  .poof { opacity: 0 !important; scale: .2; transition: opacity .3s, scale .3s !important; }
+  .sticker { position: absolute; z-index: 238; pointer-events: none; line-height: 1; filter: drop-shadow(0 8px 16px rgba(0,0,0,.6));
+    animation: avin .35s cubic-bezier(.2,1.6,.4,1) both; transition-property: left, top, opacity, rotate; transition-timing-function: cubic-bezier(.45,.05,.2,1); }
+  .heart { position: absolute; z-index: 248; pointer-events: none; font-size: 20px; animation: floatUp 1.8s ease-out forwards; }
+  @keyframes floatUp { 0% { transform: translateY(0) scale(.4); opacity: 0; } 15% { opacity: 1; transform: translateY(-10px) scale(1.1); } 100% { transform: translateY(-90px) scale(.8); opacity: 0; } }
+  .shake { animation: shake .4s ease-in-out 2; }
+  @keyframes shake { 25% { translate: -6px 0; } 75% { translate: 6px 0; } }
   .zoom { font-size: 12px; color: var(--muted); flex: none; }
   @media (max-width: 720px) {
     .tools, .zoom { display: none; }
@@ -475,7 +482,7 @@ const TEAM = [
   ["Fah", "#34d399"], ["Nont", "#4ade80"], ["June", "#facc15"], ["Kao", "#22d3ee"], ["Pim", "#86efac"],
 ];
 const IDLE_CHAT = ["ใครเปลี่ยนฟอนต์ 👀", "ขยับซ้ายอีก 2px", "ship it 🚀", "☕ พักแป๊บ", "สวยมาก!!", "อันนี้ auto layout ยัง?",
-  "555555", "ใครลบ layer ผม 😭", "เขียวกว่านี้ได้อีก", "LGTM ✅", "ขอ component หน่อย", "ตามมาดูตรงนี้", "แมวเดินผ่านคีย์บอร์ด 🐈"];
+  "555555", "ใครลบ layer ผม 😭", "เขียวกว่านี้ได้อีก", "LGTM ✅", "ขอ component หน่อย", "ตามมาดูตรงนี้", "ใครเปิดเพลงในคอล 🎵", "หิวข้าวแล้ว 🍜"];
 
 const canvas = document.getElementById("canvas");
 const layerEl = document.getElementById("layer");
@@ -693,9 +700,36 @@ async function fill(c, el) {
   el.classList.remove("is-sel");
 }
 
-async function type(c, el, speed = 1) {
-  setTool("text");
+function caretTo(c, live) {
+  const rg = document.createRange(); rg.selectNodeContents(live);
+  const rects = rg.getClientRects(), last = rects[rects.length - 1], cr = canvas.getBoundingClientRect();
+  if (last) c.place(last.right - cr.left + 6, last.bottom - cr.top - 4, 110);
+}
+async function typeChars(c, el, str, speed = 1) {
   const live = $(el, ".tw-live");
+  let i = 0;
+  const chars = Array.from(str);
+  for (const ch of chars) {
+    live.textContent += ch;
+    if (++i % 2 === 0 || i === chars.length) caretTo(c, live);
+    await sleep((ch === " " ? 70 : rand(28, 70)) / speed * (c.slow || 1));
+  }
+}
+async function backspace(c, el, n) {
+  const live = $(el, ".tw-live");
+  for (let k = 0; k < n; k++) {
+    live.textContent = Array.from(live.textContent).slice(0, -1).join("");
+    caretTo(c, live);
+    await sleep(45);
+  }
+}
+function finishType(c, el) {
+  $(el, ".tw-live").innerHTML = el._html; // คืน markup เดิม (เช่น <em>)
+  el.classList.remove("typing");
+  activity(c, `พิมพ์ "${el._text.trim().slice(0, 22)}${el._text.trim().length > 22 ? "…" : ""}"`);
+}
+async function type(c, el, speed = 1, text, finish = true) {
+  setTool("text");
   const r = rel(el); follow(r);
   await c.moveTo(r.x, r.y + Math.min(r.h, 40) / 2);
   await c.click();
@@ -703,20 +737,8 @@ async function type(c, el, speed = 1) {
   el.classList.add("typing");
   addLayer(el, c, "text");
   inspect(c, el, r);
-  const chars = Array.from(el._text.replace(/\s+/g, " ").trim());
-  let i = 0;
-  for (const ch of chars) {
-    live.textContent += ch;
-    if (++i % 2 === 0 || i === chars.length) {
-      const rg = document.createRange(); rg.selectNodeContents(live);
-      const rects = rg.getClientRects(), last = rects[rects.length - 1], cr = canvas.getBoundingClientRect();
-      if (last) c.place(last.right - cr.left + 6, last.bottom - cr.top - 4, 110);
-    }
-    await sleep((ch === " " ? 70 : rand(28, 70)) / speed * (c.slow || 1));
-  }
-  live.innerHTML = el._html; // คืน markup เดิม (เช่น <em>)
-  el.classList.remove("typing");
-  activity(c, `พิมพ์ "${el._text.trim().slice(0, 22)}${el._text.trim().length > 22 ? "…" : ""}"`);
+  await typeChars(c, el, text ?? el._text.replace(/\s+/g, " ").trim(), speed);
+  if (finish) finishType(c, el);
   await sleep(150);
 }
 
@@ -798,6 +820,121 @@ async function comment(c, el, text, where = "tr") {
   await sleep(700);
 }
 
+/* ---------- มุก human error ---------- */
+async function oops(c, el, msg = "เอ๊ะ...") {
+  setTool("move");
+  const r = rel(el); follow(r);
+  await c.moveTo(r.x + r.w / 2, r.y + r.h / 2); await c.click();
+  el.style.setProperty("--sc", c.color); el.classList.add("is-sel");
+  await sleep(350);
+  el.classList.add("poof");
+  activity(c, `ลบ ${nameOf(el)} 😱`);
+  await c.say(msg, 1600); await sleep(1000);
+  await c.say("⌘Z ⌘Z ⌘Z!!", 1600); await sleep(500);
+  toast(c, "Undo ↩︎");
+  el.classList.remove("poof", "is-sel");
+  await sleep(400);
+}
+async function stretch(c, el, k = 1.6) {
+  setTool("move");
+  const r = rel(el); follow(r);
+  await c.moveTo(r.x + r.w, r.y + r.h); c.down();
+  el.style.transformOrigin = "top left";
+  el.style.transition = "scale .8s cubic-bezier(.45,.05,.2,1)";
+  el.style.zIndex = 5; el.style.position ||= "relative";
+  el.style.setProperty("--sc", c.color); el.classList.add("is-sel");
+  el.style.scale = k; el._k = k;
+  c.place(r.x + r.w * k, r.y + r.h * k, 800);
+  await sleep(840); c.up();
+  activity(c, `ยืด ${nameOf(el)} เป็น ${Math.round(k * 100)}% 🫠`);
+}
+async function unstretch(c, el) {
+  const r = rel(el);
+  await c.moveTo(r.x + r.w, r.y + r.h); c.down();
+  const k = el._k || 1;
+  el.style.scale = 1;
+  c.place(r.x + r.w / k, r.y + r.h / k, 800);
+  await sleep(840); c.up();
+  el.classList.remove("is-sel"); el.style.zIndex = "";
+}
+function hearts(x, y, n = 6, set = ["💚", "💖", "😍", "💕"]) {
+  for (let i = 0; i < n; i++) setTimeout(() => {
+    const h = document.createElement("span");
+    h.className = "heart"; h.textContent = pick(set);
+    h.style.left = x + rand(-30, 30) + "px"; h.style.top = y + rand(-10, 10) + "px";
+    layerEl.appendChild(h); setTimeout(() => h.remove(), 1900);
+  }, i * 140);
+}
+async function chase(c, target, times = 3, line) {
+  for (let k = 0; k < times; k++) {
+    await c.moveTo(target.x + rand(18, 40), target.y + rand(18, 40));
+    if (k === 0 && line) c.say(line, 2400);
+    hearts(c.x + 10, c.y, 2);
+    await sleep(300);
+  }
+}
+async function sticker(c, emoji, target, size = 90, dx = 0, dy = 0) {
+  const r = rel(target); follow(r);
+  const s = document.createElement("div");
+  s.className = "sticker"; s.textContent = emoji; s.style.fontSize = size + "px";
+  s.style.left = c.x - size / 2 + "px"; s.style.top = c.y - size / 2 + "px";
+  layerEl.appendChild(s);
+  await sleep(350);
+  const tx = r.x + r.w / 2 + dx, ty = r.y + r.h / 2 + dy;
+  const dur = 900;
+  c.down();
+  s.style.transitionDuration = dur + "ms";
+  s.style.left = tx - size / 2 + "px"; s.style.top = ty - size / 2 + "px";
+  c.place(tx, ty, dur);
+  await sleep(dur + 40); c.up();
+  activity(c, `แปะรูป ${emoji}`);
+  s._size = size;
+  return s;
+}
+async function dragAway(c, s, dx, dy) {
+  const x = parseFloat(s.style.left) + s._size / 2, y = parseFloat(s.style.top) + s._size / 2;
+  await c.moveTo(x, y); c.down();
+  s.style.transitionDuration = "800ms";
+  s.style.left = parseFloat(s.style.left) + dx + "px"; s.style.top = parseFloat(s.style.top) + dy + "px";
+  s.style.opacity = 0;
+  c.place(x + dx, y + dy, 800);
+  await sleep(840); c.up();
+  setTimeout(() => s.remove(), 300);
+}
+async function tug(a, b, el) {
+  const r = rel(el); follow(r);
+  await Promise.all([a.moveTo(r.x + 10, r.y + r.h / 2), b.moveTo(r.x + r.w - 10, r.y + r.h / 2)]);
+  a.down(); b.down();
+  el.style.setProperty("--sc", "#ff3b4e"); el.classList.add("is-sel");
+  for (let k = 0; k < 5; k++) {
+    const d = k % 2 ? 50 : -50;
+    el.style.transition = "translate .3s ease-in-out";
+    el.style.translate = `${d}px 0`;
+    a.place(r.x + 10 + d, r.y + r.h / 2, 300); b.place(r.x + r.w - 10 + d, r.y + r.h / 2, 300);
+    await sleep(340);
+  }
+  el.style.translate = "0 0";
+  a.up(); b.up(); el.classList.remove("is-sel");
+}
+async function recolor(c, el, color) {
+  const r = rel(el); follow(r);
+  await c.moveTo(r.x + r.w / 2, r.y + r.h / 2); await c.click();
+  el.style.transition = "background .5s"; el.style.background = color || "";
+  inspect(c, el, r, color || el.dataset.fill);
+  activity(c, `เปลี่ยนสี ${nameOf(el)} → ${(color || el.dataset.fill).toUpperCase()}`);
+}
+async function countTo(c, b, to, ms = 900) {
+  const r = rel(b);
+  await c.moveTo(r.x + 20, r.y + r.h / 2); await c.click();
+  const from = +b.textContent.replace(/,/g, "");
+  const t0 = performance.now();
+  await new Promise(res => (function f(t) {
+    const k = Math.min(1, (t - t0) / ms);
+    b.textContent = Math.round(from + (to - from) * k).toLocaleString("en-US");
+    k < 1 ? requestAnimationFrame(f) : res();
+  })(t0));
+}
+
 /* ---------- section scripts ---------- */
 const frames = $$(document, ".frame");
 const all = (...ps) => Promise.all(ps);
@@ -817,14 +954,25 @@ const SCRIPTS = [
     c.slow = 2.2; c.el.classList.add("tired");
     await move(c, $(f, ".btn.primary"), -160, 90); await move(c, $(f, ".btn.ghost"), 160, 110);
   }),
-  // 02 About
+  // 02 About — รูปหมามาแปะ + Ice เริ่มจีบ Fah
   f => all(
     job("Tonkla", async c => { await draw(c, $(f, ".photo")); await fill(c, $(f, ".photo")); await c.say("แมวคือ brand ของภูมิ"); }),
     job("Fah", async c => { await sleep(600); await type(c, $(f, ".eyebrow")); await type(c, $(f, "h2")); await type(c, $(f, ".bio"), 1.6); }),
+    job("Ice", async c => { await sleep(2600); await chase(c, C.Fah, 4, "Fah พิมพ์เร็วจัง 😍"); }),
+    job("Fah", async c => { await sleep(300); await c.say("Ice อย่ามายืนใกล้ 😳", 2200); }),
     job("Nont", async c => { await sleep(2500); for (const [k, ch] of $$(f, ".chip").entries()) await move(c, ch, 60 + k * 30, 70); }),
-    job("Kao", async c => { await sleep(5200); await comment(c, $(f, ".bio"), "Hi5 นี่ปีไหนนะ 😂"); }),
+    job("Bank", async c => {
+      await sleep(4800);
+      await c.say("แมวเยอะไป ขอหมาบ้าง 🐶");
+      const dog = await sticker(c, "🐶", $(f, ".photo"), 110, 30, 20);
+      hearts(c.x, c.y, 3, ["🐶", "🦴"]);
+      await sleep(1800);
+      await C.Tonkla.run(async t => { await t.say("นี่โปรไฟล์ภูมินะ ไม่ใช่หมาเธอ 😤", 2400); await sleep(600); await dragAway(t, dog, 260, 140); });
+      await c.say("แง 🥺", 1600);
+    }),
+    job("Kao", async c => { await sleep(6500); await comment(c, $(f, ".bio"), "Hi5 นี่ปีไหนนะ 😂"); await c.say("Ice ทำงานด้วย 👀"); }),
   ),
-  // 03 Skills
+  // 03 Skills — Pim มือลั่นลบ layer
   f => {
     const rows = $$(f, ".skill");
     return all(
@@ -834,40 +982,73 @@ const SCRIPTS = [
       job("Bank", async c => { await sleep(3200); for (const r of rows.slice(0, 3)) { while (!r.classList.contains("shown")) await sleep(100); await bar(c, r); } }),
       job("June", async c => { await sleep(4400); for (const r of rows.slice(3)) { while (!r.classList.contains("shown")) await sleep(100); await bar(c, r); }
         await comment(c, rows[5], "ตื่นเช้า 12% ยังเยอะไป 😴"); }),
+      job("Pim", async c => {
+        await sleep(9500);
+        await oops(c, rows[2], "เอ๊ะ ปุ่ม Delete อยู่ตรงนี้เหรอ");
+        await C.Kao.run(k => k.say("ใครลบ CSS ไปอะ 😂", 2000));
+        await c.say("มือลั่น 🙏 คืนแล้วๆ", 2000);
+      }),
     );
   },
-  // 04 Projects
+  // 04 Projects — Nont ยืดการ์ดพัง + แมวเดินบนคีย์บอร์ด
   f => {
     const cards = $$(f, ".card");
-    const build = (name, card, delay, note) => job(name, async c => {
+    const build = (name, card, delay, note, desc) => job(name, async c => {
       await sleep(delay);
       await draw(c, card);
       await fill(c, $(card, ".thumb"));
       await type(c, $(card, "h3"));
-      await type(c, $(card, "p"), 1.4);
+      if (desc) await desc(c, $(card, "p")); else await type(c, $(card, "p"), 1.4);
       for (const t of $$(card, ".tag")) await move(c, t, 40, 40);
       if (note) await c.say(note);
     });
+    const catWalk = async (c, p) => {
+      await type(c, p, 1.4, undefined, false);
+      await typeChars(c, p, " ฟหกฟกหดเ่าาาสววว", 4);
+      await c.say("😱 แมวเดินผ่านคีย์บอร์ด 🐈", 2200);
+      await sleep(900);
+      await backspace(c, p, 17);
+      finishType(c, p);
+    };
     return all(
       job("Ploy", async c => { await type(c, $(f, ".eyebrow")); await type(c, $(f, "h2")); }),
-      build("Kao", cards[0], 900, "การ์ดแรกเสร็จ ✅"),
+      build("Kao", cards[0], 900, "การ์ดแรกเสร็จ ✅", catWalk),
       build("Fah", cards[1], 1700, "ใส่ไอคอนฝนแล้ว 🌦️"),
       build("Tonkla", cards[2], 2500, "ผักยังไม่โตเลย 🌱"),
-      job("Nont", async c => { await sleep(9000); await comment(c, cards[1], "อันนี้ขอดู prototype หน่อย"); }),
+      job("Nont", async c => {
+        await sleep(12500);
+        await c.say("ขอขยายรูปนิดนึง");
+        await stretch(c, cards[1], 1.7);
+        await c.say("อ้าว... ทำไมมันใหญ่ขนาดนี้ 🫠", 2400);
+        await C.June.run(j => j.say("Nont!!! การ์ดทับกันหมดแล้ว 😱", 2400));
+        await sleep(900);
+        await unstretch(c, cards[1]);
+        await c.say("ปกติแล้วๆ ไม่มีใครเห็นนะ", 2200);
+      }),
     );
   },
-  // 05 Journey
+  // 05 Journey — Ice เอากาแฟมาให้ Fah
   f => {
     const items = $$(f, ".tl li");
     return all(
       job("June", async c => { await type(c, $(f, ".eyebrow")); await type(c, $(f, "h2")); }),
       job("Pim", async c => { await sleep(1000); await line(c, $(f, ".tl")); await c.say("เส้นตรงสวยๆ ✏️"); }),
       job("Bank", async c => { await sleep(2600); for (const li of items.slice(0, 3)) { await move(c, li, -80, 0); await type(c, $(li, "span"), 1.3); } }),
-      job("Ice", async c => { await sleep(4000); for (const li of items.slice(3)) { while (!items[2].classList.contains("shown")) await sleep(120); await move(c, li, -80, 0); await type(c, $(li, "span"), 1.3); }
+      job("Kao", async c => { await sleep(4000); for (const li of items.slice(3)) { while (!items[2].classList.contains("shown")) await sleep(120); await move(c, li, -80, 0); await type(c, $(li, "span"), 1.3); }
         await comment(c, items[2], "เมื่อวานจริง 555"); }),
+      job("Ice", async c => {
+        await sleep(3000);
+        await c.say("Fah ☕ เอาลาเต้มาให้", 2400);
+        const cup = await sticker(c, "☕", $(f, "h2"), 56, 160, 0);
+        hearts(c.x, c.y, 6);
+        await C.Fah.run(async fa => { await fa.moveTo(c.x + 30, c.y + 30); await fa.say("...ขอบใจ 😳", 2200); });
+        await C.Mint.run(m => m.say("ห้องนี้ทำงานนะคะ 🙄", 2200));
+        await sleep(1500);
+        cup.style.transition = "opacity .5s"; cup.style.opacity = 0; setTimeout(() => cup.remove(), 600);
+      }),
     );
   },
-  // 06 Numbers
+  // 06 Numbers — June แก้ตัวเลขเว่อร์
   f => {
     const st = $$(f, ".stat");
     return all(
@@ -876,20 +1057,49 @@ const SCRIPTS = [
       job("Ploy", async c => { await sleep(1200); await draw(c, st[1]); await count(c, st[1]); await c.say("ลาเต้เยอะไปมั้ย ☕"); }),
       job("Kao", async c => { await sleep(1700); await draw(c, st[2]); await count(c, st[2]); }),
       job("Fah", async c => { await sleep(2200); await draw(c, st[3]); await count(c, st[3]); await comment(c, st[3], "ตัวเลขนี้ห้ามบอกลูกค้า 🤫"); }),
+      job("June", async c => {
+        await sleep(7500);
+        await c.say("ใส่ให้ดูเยอะๆ ไปเลย 😏");
+        await countTo(c, $(st[0], "b"), 9999);
+        $(st[0], "b").parentElement.classList.add("shake");
+        await C.Mint.run(async m => { await m.say("June!!! ไม่ได้โม้เว้ย 😂", 2200); await sleep(700); await countTo(m, $(st[0], "b"), 42); });
+        st[0].classList.remove("shake");
+        await c.say("ก็แค่ลองดู 🤭", 1800);
+      }),
     );
   },
-  // 07 Moodboard
+  // 07 Moodboard — June เปลี่ยนเป็นสีชมพู + แย่งสติ๊กเกอร์แมว
   f => {
     const sh = n => $(f, n);
     return all(
       job("Tonkla", async c => { await type(c, $(f, ".eyebrow")); await type(c, $(f, "h2")); await c.say("ขอ vibe แบบ Canva"); }),
       job("Ice", async c => { await sleep(800); await draw(c, sh(".s-circle")); await fill(c, sh(".s-circle")); await draw(c, sh(".s-blob")); await fill(c, sh(".s-blob")); }),
-      job("June", async c => { await sleep(1400); await draw(c, sh(".s-star")); await fill(c, sh(".s-star")); await move(c, sh(".s-pill"), -120, 40); }),
+      job("June", async c => {
+        await sleep(1400); await draw(c, sh(".s-star")); await fill(c, sh(".s-star"));
+        await c.say("ชมพูน่ารักกว่า 💖");
+        await recolor(c, sh(".s-star"), "#ff6ad5");
+        await sleep(600);
+        await all(C.Ploy.run(p => p.say("ธีมเขียวนะ!!", 2000)), C.Nont.run(n => n.say("June 😑", 2000)), C.Kao.run(k => k.say("ใจเย็นๆ 555", 2000)));
+        await sleep(900);
+        await recolor(c, sh(".s-star"));
+        await c.say("โอเคๆ เขียวก็เขียว 💚", 1800);
+        await move(c, sh(".s-pill"), -120, 40);
+      }),
       job("Pim", async c => { await sleep(2000); await draw(c, sh(".s-square")); await fill(c, sh(".s-square")); await move(c, sh(".s-cat"), 140, -60); await c.say("แมวดำต้องมี 🐈‍⬛"); }),
-      job("Bank", async c => { await sleep(4200); await type(c, sh(".s-word")); await comment(c, sh(".s-word"), "คำนี้แหละ concept"); }),
+      job("Bank", async c => {
+        await sleep(4200); await type(c, sh(".s-word")); await comment(c, sh(".s-word"), "คำนี้แหละ concept");
+        while (!sh(".s-cat").classList.contains("shown")) await sleep(150);
+        await sleep(600);
+        await c.say("แมวตัวนี้ขอไปไว้ตรงนู้น");
+        await C.Pim.run(async p => {
+          p.say("ไม่ให้!! ตรงนี้แหละ 😤", 2600);
+          await tug(c, p, sh(".s-cat"));
+        });
+        await c.say("ปล่อยก็ได้ 😮‍💨", 1800);
+      }),
     );
   },
-  // 08 Team says
+  // 08 Team says — Ice แอบเขียนโน้ตถึง Fah
   f => {
     const s = $$(f, ".sticky");
     const st = (name, el, d) => job(name, async c => { await sleep(d); await draw(c, el, "แปะโน้ต"); await type(c, $(el, "p"), 1.2); });
@@ -897,15 +1107,36 @@ const SCRIPTS = [
       job("Mint", async c => { await type(c, $(f, ".eyebrow")); await type(c, $(f, "h2")); await c.say("ทุกคนเขียนคนละโน้ตนะ ✍️"); }),
       st("Fah", s[0], 900), st("Nont", s[1], 1300), st("June", s[2], 1700),
       st("Kao", s[3], 2100), st("Pim", s[4], 2500), st("Tonkla", s[5], 2900),
+      job("Ice", async c => {
+        await sleep(6500);
+        const heart = await sticker(c, "💌", s[0], 64, 90, -50);
+        await c.say("แปะไว้ให้ Fah 🥰", 2400);
+        hearts(c.x, c.y, 8);
+        await sleep(600);
+        await all(C.Kao.run(k => k.say("อุ๊ยยยย 👀", 2000)), C.June.run(j => j.say("แซวได้มั้ยเนี่ย 😂", 2000)), C.Fah.run(fa => fa.say("ทุกคนเงียบ!! 😳", 2200)));
+        await sleep(1800);
+        heart.style.transition = "opacity .6s"; heart.style.opacity = 0; setTimeout(() => heart.remove(), 700);
+      }),
     );
   },
-  // 09 Contact
+  // 09 Contact — Bank พิมพ์อีเมลผิด
   f => all(
     job("Ploy", async c => { await type(c, $(f, ".eyebrow")); await type(c, $(f, "h2"), .9); }),
-    job("Bank", async c => { await sleep(2600); await type(c, $(f, ".mail")); await c.say("อีเมลสมมตินะ 😉"); }),
+    job("Bank", async c => {
+      await sleep(2600);
+      const mail = $(f, ".mail");
+      await type(c, mail, 1, "phum@exmaple.con", false);
+      await C.Nont.run(n => n.say("Bank... exmaple.con 🤨", 2200));
+      await sleep(600);
+      await c.say("ตาลาย 😵 แก้ๆ", 1600);
+      await backspace(c, mail, 11);
+      await typeChars(c, mail, "example.com");
+      finishType(c, mail);
+      await c.say("อีเมลสมมตินะ 😉");
+    }),
     job("Ice", async c => { await sleep(3200); for (const [k, s] of $$(f, ".social").entries()) await move(c, s, (k - 1.5) * 90, 80); }),
     job("Mint", async c => { await sleep(5200); await move(c, $(f, ".btn"), 0, 120); await comment(c, $(f, ".btn"), "ปุ่มนี้แหละ ที่สำคัญสุด"); }),
-    job("Nont", async c => { await sleep(7000); await type(c, $(f, ".foot")); }),
+    job("Nont", async c => { await sleep(9000); await type(c, $(f, ".foot")); }),
   ),
 ];
 
@@ -964,7 +1195,14 @@ async function finale() {
     await c.moveTo(r.x + r.w / 2 + Math.cos(a) * 170, r.y + r.h / 2 + Math.sin(a) * 110);
   }));
   await sleep(1400);
-  for (const [k, c] of cs.entries()) { c.say(pick(["🎉", "เสร็จแล้ว!", "ship it 🚀", "เยี่ยม!", "💚", "ปิดไฟล์ได้"]), 4000); await sleep(120); }
+  for (const [k, c] of cs.entries()) { c.say(pick(["🎉", "เสร็จแล้ว!", "ship it 🚀", "เยี่ยม!", "💚", "ปิดไฟล์ได้"]), 2600); await sleep(120); }
+  await sleep(2400);
+  await C.Ice.say("Fah... เลิกงานไปกินข้าวกันมั้ย 👉👈", 3000);
+  await sleep(1800);
+  await C.Fah.say("...ก็ได้ 😳", 3000);
+  hearts(C.Fah.x, C.Fah.y, 10);
+  await sleep(900);
+  for (const c of cs.filter(c => c !== C.Ice && c !== C.Fah)) { c.say(pick(["เย้ยยย 🎉", "อุ๊ยยย 👀", "ในที่สุด!!", "💚💚💚", "เลี้ยงด้วยนะ"]), 3000); await sleep(100); }
   for (let i = 0; i < 70; i++) {
     const p = document.createElement("div");
     p.className = "confetti";
