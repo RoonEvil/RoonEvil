@@ -246,11 +246,13 @@
   /* ================= overlays ================= */
   #loader { position: fixed; inset: 0; z-index: 900; background: #030705; display: grid; place-items: center; transition: opacity .5s, visibility .5s; }
   #loader.hide { opacity: 0; visibility: hidden; }
-  .ld { width: min(320px, 80vw); text-align: center; font-size: 14px; color: var(--muted); }
-  .ld .logo { margin: 0 auto 18px; width: 44px; height: 44px; border-radius: 11px; }
-  .ld .track { height: 3px; background: #11221a; border-radius: 9px; margin-top: 14px; overflow: hidden; }
-  .ld .track i { display: block; height: 100%; width: 0; background: var(--neon); box-shadow: 0 0 10px var(--neon); transition: width 1.3s ease; }
-
+  #rain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .35; }
+  #bootText { position: relative; margin: 0; padding: 16px; min-width: min(440px, 100%); white-space: pre-wrap;
+    font: 400 14px/1.9 "JetBrains Mono", monospace; color: var(--neon); text-shadow: 0 0 8px rgba(57,255,136,.7); }
+  #bootText .ok { color: var(--lime); }
+  #bootText .cur { display: inline-block; width: .6em; height: 1.05em; vertical-align: -3px; background: var(--neon); animation: blink .7s steps(1) infinite; }
+  #loader.hide { transform: scale(1.06); }
+  #loader { transition: opacity .6s, visibility .6s, transform .6s; }
   .toasts { position: fixed; left: 50%; translate: -50% 0; top: calc(var(--top) + 12px); z-index: 500; display: grid; gap: 6px; justify-items: center; pointer-events: none; }
   .toast { background: #0d1a13; border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px 6px 8px; font-size: 13px;
     display: flex; gap: 8px; align-items: center; animation: tin .3s ease both; box-shadow: 0 8px 20px rgba(0,0,0,.5); }
@@ -274,7 +276,7 @@
 </head>
 <body>
 
-<div id="loader"><div class="ld"><div class="logo"></div><div>กำลังเปิด <b style="color:var(--ink)">ภูมิ — Portfolio.fig</b></div><div class="track"><i id="ldbar"></i></div></div></div>
+<div id="loader"><canvas id="rain"></canvas><pre id="bootText"></pre></div>
 
 <header class="topbar">
   <div class="logo"></div>
@@ -958,12 +960,44 @@ async function finale() {
   setAuto(false);
 }
 
+/* ---------- boot: หน้าเทอร์มินัล + ฝนตัวอักษร ---------- */
+async function bootScreen() {
+  const cv = document.getElementById("rain"), ctx = cv.getContext("2d"), pre = document.getElementById("bootText");
+  cv.width = innerWidth; cv.height = innerHeight;
+  const glyphs = "アイウエオカキクケコサシスセソ0123456789กขคงจฉชซ<>/{}=+*".split("");
+  const drops = Array.from({ length: Math.ceil(innerWidth / 18) }, () => rand(-30, 0));
+  const timer = setInterval(() => {
+    ctx.fillStyle = "rgba(3,7,5,.14)"; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.font = "15px JetBrains Mono, monospace";
+    drops.forEach((d, i) => {
+      ctx.fillStyle = Math.random() < .08 ? "#d9ffe9" : "#1fd46e";
+      ctx.fillText(pick(glyphs), i * 18, d * 18);
+      drops[i] = d * 18 > cv.height && Math.random() > .975 ? 0 : d + 1;
+    });
+  }, 55);
+  const lines = [
+    ["> booting profile.exe", ""],
+    ["> loading memories", " [OK]"],
+    ["> connecting 10 designers", " [OK]"],
+    ["> opening ภูมิ — Portfolio.fig", " [100%]"],
+    ["> rendering vibes", " [OK]"],
+  ];
+  let out = "";
+  const show = extra => pre.innerHTML = out + extra + '<span class="cur"></span>';
+  for (const [l, ok] of lines) {
+    for (const ch of Array.from(l)) { out += esc(ch); show(""); await sleep(20); }
+    await sleep(160);
+    out += `<span class="ok">${ok}</span>\n`; show("");
+  }
+  await sleep(500);
+  clearInterval(timer);
+}
+
 /* ---------- boot: เปิดไฟล์ แล้วทีมทยอยเข้า ---------- */
 (async () => {
   scrollTo(0, 0);
   await sleep(100);
-  document.getElementById("ldbar").style.width = "100%";
-  await sleep(1400);
+  await bootScreen();
   document.getElementById("loader").classList.add("hide");
   const avs = document.getElementById("avatars");
   const shown = innerWidth < 720 ? 3 : 6;
