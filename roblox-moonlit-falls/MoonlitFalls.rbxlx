@@ -1,7 +1,221 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" version="4">
 <Item class="Workspace" referent="RBX00000001"><Properties><string name="Name">Workspace</string></Properties></Item>
 <Item class="Lighting" referent="RBX00000002"><Properties><string name="Name">Lighting</string></Properties></Item>
-<Item class="ReplicatedStorage" referent="RBX00000005"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000004"><Properties><string name="Name">Shared</string></Properties><Item class="ModuleScript" referent="RBX00000003"><Properties><string name="Name">Config</string><ProtectedString name="Source"><![CDATA[-- Game settings shared by server and client.
+<Item class="ReplicatedStorage" referent="RBX00000006"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000005"><Properties><string name="Name">Shared</string></Properties><Item class="ModuleScript" referent="RBX00000003"><Properties><string name="Name">Anims</string><ProtectedString name="Source"><![CDATA[-- Procedural animations. No uploaded assets needed: poses are joint angles
+-- (degrees, X/Y/Z) applied on top of each R15 Motor6D's resting C0.
+--
+-- Joint axes on R15:  +X on a shoulder/hip swings the limb forward,
+-- -X on Waist leans forward, -X on Neck looks down, +Z on RightShoulder lifts it sideways.
+local Anims = {}
+
+local GRAB = {
+	Waist = { -30, 0, 0 },
+	Neck = { -25, 0, 20 },
+	RightShoulder = { 75, 0, 25 },
+	LeftShoulder = { 75, 0, -25 },
+	RightElbow = { 45, 0, 0 },
+	LeftElbow = { 45, 0, 0 },
+}
+local COMPEL = {
+	Waist = { -8, 0, 0 },
+	Neck = { -6, 0, 0 },
+	RightShoulder = { 95, 0, 8 },
+	RightElbow = { 10, 0, 0 },
+	LeftShoulder = { 10, 0, -10 },
+}
+local STAKE_DOWN = {
+	RightShoulder = { 55, 0, -5 },
+	RightElbow = { 5, 0, 0 },
+	LeftShoulder = { 40, 0, -10 },
+	Waist = { -25, 0, 0 },
+}
+local DASH = {
+	Waist = { -35, 0, 0 },
+	Neck = { 20, 0, 0 },
+	RightShoulder = { -55, 0, 10 },
+	LeftShoulder = { -55, 0, -10 },
+	RightHip = { 25, 0, 0 },
+	LeftHip = { -30, 0, 0 },
+}
+local VICTIM = {
+	Neck = { 10, 0, -35 },
+	Waist = { 12, 0, 0 },
+	RightShoulder = { 35, 0, 45 },
+	LeftShoulder = { 35, 0, -45 },
+	RightKnee = { -15, 0, 0 },
+	LeftKnee = { -15, 0, 0 },
+}
+local ROAR = {
+	Waist = { 20, 0, 0 },
+	Neck = { 35, 0, 0 },
+	RightShoulder = { 30, 0, 80 },
+	LeftShoulder = { 30, 0, -80 },
+	RightElbow = { 60, 0, 0 },
+	LeftElbow = { 60, 0, 0 },
+}
+
+-- One-shot clips: list of {time, pose}. Missing joints = rest.
+Anims.Clips = {
+	Bite = { length = 1.0, keys = { { 0, {} }, { 0.12, GRAB }, { 0.78, GRAB }, { 1.0, {} } } },
+	Bitten = { length = 1.0, keys = { { 0, {} }, { 0.1, VICTIM }, { 0.8, VICTIM }, { 1.0, {} } } },
+	Compel = { length = 1.4, keys = { { 0, {} }, { 0.2, COMPEL }, { 1.1, COMPEL }, { 1.4, {} } } },
+	Stake = {
+		length = 0.8,
+		keys = {
+			{ 0, {} },
+			{ 0.25, { RightShoulder = { 170, 0, 10 }, RightElbow = { 35, 0, 0 }, Waist = { 12, 0, 0 } } },
+			{ 0.38, STAKE_DOWN },
+			{ 0.6, STAKE_DOWN },
+			{ 0.8, {} },
+		},
+	},
+	Throw = {
+		length = 0.7,
+		keys = {
+			{ 0, {} },
+			{ 0.2, { RightShoulder = { 150, 0, 35 }, Waist = { 0, 30, 0 }, LeftShoulder = { 40, 0, -20 } } },
+			{ 0.35, { RightShoulder = { 45, 0, -10 }, Waist = { -12, -25, 0 } } },
+			{ 0.7, {} },
+		},
+	},
+	Claw = {
+		length = 0.6,
+		keys = {
+			{ 0, {} },
+			{ 0.15, { RightShoulder = { 130, 0, 60 }, LeftShoulder = { 130, 0, -60 }, Waist = { 12, 0, 0 } } },
+			{ 0.3, { RightShoulder = { 40, 0, -25 }, LeftShoulder = { 40, 0, 25 }, Waist = { -30, 0, 0 } } },
+			{ 0.6, {} },
+		},
+	},
+	Dash = { length = 0.45, keys = { { 0, {} }, { 0.08, DASH }, { 0.32, DASH }, { 0.45, {} } } },
+	Hit = { length = 0.4, keys = { { 0, {} }, { 0.07, { Waist = { 15, 0, 0 }, Neck = { 22, 0, 0 } } }, { 0.4, {} } } },
+	Transform = {
+		length = 1.8,
+		keys = {
+			{ 0, {} },
+			{ 0.3, { Waist = { -45, 0, 0 }, Neck = { -30, 0, 0 }, RightShoulder = { 20, 0, 10 }, LeftShoulder = { 20, 0, -10 } } },
+			{ 0.9, ROAR },
+			{ 1.5, ROAR },
+			{ 1.8, {} },
+		},
+	},
+	Wave = {
+		length = 1.6,
+		keys = {
+			{ 0, {} },
+			{ 0.25, { RightShoulder = { 0, 0, 150 }, RightElbow = { 20, 0, 0 } } },
+			{ 0.55, { RightShoulder = { 0, 0, 130 }, RightElbow = { 50, 0, 0 } } },
+			{ 0.85, { RightShoulder = { 0, 0, 150 }, RightElbow = { 20, 0, 0 } } },
+			{ 1.15, { RightShoulder = { 0, 0, 130 }, RightElbow = { 50, 0, 0 } } },
+			{ 1.6, {} },
+		},
+	},
+	Scream = {
+		length = 1.0,
+		keys = {
+			{ 0, {} },
+			{ 0.15, { Neck = { 15, 0, 0 }, RightShoulder = { 160, 0, 20 }, LeftShoulder = { 160, 0, -20 } } },
+			{ 0.8, { Neck = { 15, 0, 0 }, RightShoulder = { 150, 0, 30 }, LeftShoulder = { 150, 0, -30 } } },
+			{ 1.0, {} },
+		},
+	},
+}
+
+-- Looping layers, chosen every frame from the character's state.
+Anims.Loops = {
+	Stunned = function(t)
+		return {
+			Neck = { -30 + math.sin(t * 2) * 5, math.sin(t * 1.3) * 12, 0 },
+			Waist = { -8, 0, math.sin(t * 1.7) * 6 },
+			RightShoulder = { 5, 0, 6 },
+			LeftShoulder = { 5, 0, -6 },
+		}
+	end,
+	Burning = function(t)
+		local s = math.sin(t * 30) * 5
+		return {
+			Neck = { -20 + s, 0, 0 },
+			Waist = { -15, s, 0 },
+			RightShoulder = { 135, 0, -35 },
+			LeftShoulder = { 135, 0, 35 },
+			RightElbow = { 95, 0, 0 },
+			LeftElbow = { 95, 0, 0 },
+		}
+	end,
+	-- Fallback walk for rigs with no animation tracks (townsfolk).
+	Walk = function(t, speed)
+		local f = t * (4 + speed * 0.35)
+		local a = math.sin(f) * math.clamp(speed * 2.6, 0, 40)
+		local k = math.clamp(speed * 2.2, 0, 35)
+		return {
+			RightShoulder = { -a, 0, 0 },
+			LeftShoulder = { a, 0, 0 },
+			RightElbow = { 15, 0, 0 },
+			LeftElbow = { 15, 0, 0 },
+			RightHip = { a, 0, 0 },
+			LeftHip = { -a, 0, 0 },
+			RightKnee = { -math.max(0, math.sin(f + 1.2)) * k, 0, 0 },
+			LeftKnee = { -math.max(0, -math.sin(f + 1.2)) * k, 0, 0 },
+			Waist = { -3, math.sin(f) * 4, 0 },
+		}
+	end,
+	Idle = function(t)
+		local b = math.sin(t * 1.6)
+		return {
+			Neck = { b * 2, math.sin(t * 0.37) * 10, 0 },
+			RightShoulder = { 0, 0, 3 + b * 2 },
+			LeftShoulder = { 0, 0, -3 - b * 2 },
+		}
+	end,
+}
+
+local function smooth(x)
+	return x * x * (3 - 2 * x)
+end
+
+-- Pose of a clip at time t: { Joint = {x, y, z} }.
+function Anims.Sample(clip, t: number)
+	local keys = clip.keys
+	for i = 1, #keys - 1 do
+		local t0, p0 = keys[i][1], keys[i][2]
+		local t1, p1 = keys[i + 1][1], keys[i + 1][2]
+		if t >= t0 and t <= t1 then
+			local a = smooth((t - t0) / math.max(t1 - t0, 1e-3))
+			local out = {}
+			for joint, v in p0 do
+				local w = p1[joint] or { 0, 0, 0 }
+				out[joint] = { v[1] + (w[1] - v[1]) * a, v[2] + (w[2] - v[2]) * a, v[3] + (w[3] - v[3]) * a }
+			end
+			for joint, w in p1 do
+				if not out[joint] then
+					out[joint] = { w[1] * a, w[2] * a, w[3] * a }
+				end
+			end
+			return out
+		end
+	end
+	return {}
+end
+
+-- Adds pose b into pose a (in place) with weight w.
+function Anims.Add(a, b, w: number?)
+	w = w or 1
+	for joint, v in b do
+		local cur = a[joint]
+		if cur then
+			cur[1] += v[1] * w
+			cur[2] += v[2] * w
+			cur[3] += v[3] * w
+		else
+			a[joint] = { v[1] * w, v[2] * w, v[3] * w }
+		end
+	end
+	return a
+end
+
+return Anims
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000004"><Properties><string name="Name">Config</string><ProtectedString name="Source"><![CDATA[-- Game settings shared by server and client.
 local Config = {}
 
 Config.GAME_NAME = "Moonlit Falls"
@@ -56,7 +270,7 @@ return Config
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="ServerScriptService" referent="RBX00000010"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Folder" referent="RBX00000009"><Properties><string name="Name">Server</string></Properties><Item class="Script" referent="RBX00000006"><Properties><string name="Name">GameManager</string><ProtectedString name="Source"><![CDATA[-- Moonlit Falls: main server logic.
+<Item class="ServerScriptService" referent="RBX00000012"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Folder" referent="RBX00000011"><Properties><string name="Name">Server</string></Properties><Item class="Script" referent="RBX00000007"><Properties><string name="Name">GameManager</string><ProtectedString name="Source"><![CDATA[-- Moonlit Falls: main server logic.
 -- Sides, day/night + full moon, blood hunger, sunlight, and every ability.
 local Players = game:GetService("Players")
 local Teams = game:GetService("Teams")
@@ -68,6 +282,7 @@ local Debris = game:GetService("Debris")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local MapBuilder = require(script.Parent:WaitForChild("MapBuilder"))
 local NPCs = require(script.Parent:WaitForChild("NPCs"))
+local Models = require(script.Parent:WaitForChild("Models"))
 
 ---------------------------------------------------------------- remotes
 local Remotes = Instance.new("Folder")
@@ -81,6 +296,7 @@ end
 local AbilityRemote = remote("Ability")
 local ChooseSideRemote = remote("ChooseSide")
 local NotifyRemote = remote("Notify")
+local AnimRemote = remote("Anim") -- (model, clipName, target?) played by every client
 Remotes.Parent = ReplicatedStorage
 
 ---------------------------------------------------------------- teams
@@ -191,6 +407,10 @@ local function burst(model: Model, color: Color3)
 	Debris:AddItem(pe, 1.5)
 end
 
+local function anim(model: Model, clip: string, target: Model?)
+	AnimRemote:FireAllClients(model, clip, target)
+end
+
 local function damage(attacker: Player?, target: Model, amount: number)
 	local hum = target:FindFirstChildOfClass("Humanoid")
 	if not hum or hum.Health <= 0 then
@@ -270,33 +490,20 @@ local function transform(char: Model)
 		return
 	end
 	char:SetAttribute("Transformed", true)
-	for _, p in char:GetDescendants() do
-		if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
-			p:SetAttribute("OrigColor", p.Color)
-			p.Color = Color3.fromRGB(70, 50, 35)
+	hum.WalkSpeed = 0
+	anim(char, "Transform")
+	notify(Players:GetPlayerFromCharacter(char), "🌕 พระจันทร์เต็มดวง... กระดูกเริ่มบิด คุณกำลังกลายร่าง!", GOLD)
+	task.delay(1.1, function()
+		if not char.Parent or hum.Health <= 0 or not isTransformed(char) then
+			return
 		end
-	end
-	hum.MaxHealth = Config.WolfForm.MaxHealth
-	hum.Health = hum.MaxHealth
-	hum.WalkSpeed = Config.WolfForm.WalkSpeed
-
-	local head = char:FindFirstChild("Head")
-	if head then
-		local bb = Instance.new("BillboardGui")
-		bb.Name = "WolfTag"
-		bb.Size = UDim2.fromOffset(60, 60)
-		bb.StudsOffset = Vector3.new(0, 3, 0)
-		bb.AlwaysOnTop = true
-		local t = Instance.new("TextLabel")
-		t.Size = UDim2.fromScale(1, 1)
-		t.BackgroundTransparency = 1
-		t.Text = "🐺"
-		t.TextScaled = true
-		t.Parent = bb
-		bb.Parent = head
-	end
-	burst(char, Color3.fromRGB(255, 200, 80))
-	notify(Players:GetPlayerFromCharacter(char), "🌕 พระจันทร์เต็มดวง... คุณกลายร่างเป็นหมาป่า!", GOLD)
+		Models.BuildWolf(char)
+		burst(char, Color3.fromRGB(90, 70, 50))
+		hum.MaxHealth = Config.WolfForm.MaxHealth
+		hum.Health = hum.MaxHealth
+		hum.WalkSpeed = Config.WolfForm.WalkSpeed
+		anim(char, "Howl")
+	end)
 end
 
 local function untransform(char: Model)
@@ -304,15 +511,8 @@ local function untransform(char: Model)
 		return
 	end
 	char:SetAttribute("Transformed", false)
-	for _, p in char:GetDescendants() do
-		if p:IsA("BasePart") and p:GetAttribute("OrigColor") then
-			p.Color = p:GetAttribute("OrigColor")
-		end
-	end
-	local tag = char:FindFirstChild("WolfTag", true)
-	if tag then
-		tag:Destroy()
-	end
+	Models.RemoveWolf(char)
+	burst(char, Color3.fromRGB(255, 220, 150))
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if hum then
 		hum.MaxHealth = Config.SideStats.Werewolf.MaxHealth
@@ -344,6 +544,7 @@ local Abilities = {}
 Abilities.Vampire = {
 	Bite = function(plr: Player, char: Model)
 		local target = nearest(char, 7, isSide("Human"))
+		anim(char, "Bite", target)
 		if not target then
 			notify(plr, "ไม่มีเหยื่ออยู่ใกล้ๆ 🩸")
 			return
@@ -359,6 +560,7 @@ Abilities.Vampire = {
 			return
 		end
 		damage(plr, target, 25)
+		anim(target, "Bitten", char)
 		burst(target, Color3.fromRGB(160, 0, 20))
 		plr:SetAttribute("Blood", math.min(Config.BLOOD_MAX, (plr:GetAttribute("Blood") or 0) + 35))
 		target:SetAttribute("BittenAt", now())
@@ -375,6 +577,7 @@ Abilities.Vampire = {
 			notify(plr, "ไม่มีใครให้สะกดจิตแถวนี้ 👁")
 			return
 		end
+		anim(char, "Compel", target)
 		local victim = Players:GetPlayerFromCharacter(target)
 		if vervainCount(target) > 0 then
 			notify(plr, "👁 สะกดจิตไม่ได้... คนนี้กินเวอร์เวนไว้", PURPLE)
@@ -382,20 +585,37 @@ Abilities.Vampire = {
 			return
 		end
 		stun(target, 4)
-		burst(target, Color3.fromRGB(255, 255, 255))
+		if target:GetAttribute("NPC") then
+			NPCs.Say(target, "...ค่ะ ฉันจะยืนนิ่งๆ 😶")
+			task.delay(4.2, function()
+				if target.Parent then
+					NPCs.Say(target, "เอ๊ะ เมื่อกี้ฉันทำอะไรอยู่นะ?")
+				end
+			end)
+		end
 		notify(plr, "👁 \"อยู่นิ่งๆ แล้วลืมทุกอย่างซะ\"", RED)
 		notify(victim, "😵 คุณถูกสะกดจิต... ขยับไม่ได้!", RED)
 	end,
 }
 
+local function dashFx(plr: Player, char: Model)
+	if getSide(plr) == "Werewolf" and not isTransformed(char) then
+		return
+	end
+	anim(char, "Dash")
+end
+Abilities.Vampire.Dash = dashFx
+
 Abilities.Human = {
 	Stake = function(plr: Player, char: Model)
 		local target = nearest(char, 6, isSide("Vampire"))
+		anim(char, "Stake", target)
 		if not target then
 			notify(plr, "ต้องเข้าใกล้แวมไพร์ก่อนถึงจะปักหลักได้ 🪵")
 			return
 		end
 		damage(plr, target, 35)
+		anim(target, "Hit")
 		burst(target, Color3.fromRGB(120, 80, 40))
 		addPoints(plr, 2)
 		notify(plr, "🪵 ปักหลักเข้าเต็มๆ!", GREEN)
@@ -413,6 +633,7 @@ Abilities.Human = {
 			return
 		end
 		useVervain(char)
+		anim(char, "Throw", target)
 		damage(plr, target, 15)
 		stun(target, 3)
 		burst(target, Color3.fromRGB(170, 90, 230))
@@ -424,9 +645,10 @@ Abilities.Human = {
 
 Abilities.Werewolf = {
 	Claw = function(plr: Player, char: Model)
-		local target = nearest(char, 7, function(m)
+		local target = nearest(char, isTransformed(char) and 9 or 7, function(m)
 			return sideOf(m) ~= "Werewolf"
 		end)
+		anim(char, "Claw", target)
 		if not target then
 			return
 		end
@@ -434,6 +656,7 @@ Abilities.Werewolf = {
 		local targetIsVamp = sideOf(target) == "Vampire"
 		local amount = wolf and (targetIsVamp and 45 or 30) or 12
 		damage(plr, target, amount)
+		anim(target, "Hit")
 		burst(target, Color3.fromRGB(200, 30, 30))
 		addPoints(plr, 1)
 		if wolf and targetIsVamp then
@@ -443,6 +666,7 @@ Abilities.Werewolf = {
 			notify(Players:GetPlayerFromCharacter(target), "☠️ โดนหมาป่ากัด! พิษกำลังกินร่าง...", RED)
 		end
 	end,
+	Dash = dashFx,
 }
 
 AbilityRemote.OnServerEvent:Connect(function(plr: Player, ability)
@@ -546,7 +770,7 @@ NPCs.Folder.ChildAdded:Connect(function(model)
 	end
 end)
 
-NPCs.Start(map.wanderPoints)
+NPCs.Start(map.wanderPoints, AnimRemote)
 
 ---------------------------------------------------------------- players
 local function isDay()
@@ -566,7 +790,14 @@ local function onCharacter(plr: Player, char: Model)
 	plr:SetAttribute("Blood", Config.BLOOD_START)
 
 	if side == "Werewolf" and isFullMoonNight() then
-		task.delay(1, transform, char)
+		task.delay(1.5, transform, char)
+	elseif side == "Vampire" then
+		-- Wait for the avatar to finish loading before adding the cape etc.
+		task.delay(1.2, function()
+			if char.Parent then
+				Models.DressVampire(char)
+			end
+		end)
 	end
 
 	hum.Died:Connect(function()
@@ -654,6 +885,7 @@ task.spawn(function()
 
 					if isDay() and not char:GetAttribute("HasRing") and inSunlight(char) then
 						hum:TakeDamage(Config.SUN_DAMAGE)
+					char:SetAttribute("BurningUntil", now() + 1.3)
 						local root = char:FindFirstChild("HumanoidRootPart")
 						if root and not root:FindFirstChild("SunFire") then
 							local fire = Instance.new("Fire")
@@ -732,8 +964,9 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 end)
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">MapBuilder</string><ProtectedString name="Source"><![CDATA[-- Builds the whole town of Moonlit Falls out of parts, plus the lighting.
+<Item class="ModuleScript" referent="RBX00000008"><Properties><string name="Name">MapBuilder</string><ProtectedString name="Source"><![CDATA[-- Builds the whole town of Moonlit Falls out of parts and terrain, plus the lighting.
 local Lighting = game:GetService("Lighting")
+local CollectionService = game:GetService("CollectionService")
 
 local MapBuilder = {}
 
@@ -741,7 +974,8 @@ local rng = Random.new(1864)
 local mapFolder: Folder
 
 local function part(props)
-	local p = Instance.new("Part")
+	local p = Instance.new(props.ClassName or "Part")
+	props.ClassName = nil
 	p.Anchored = true
 	p.TopSurface = Enum.SurfaceType.Smooth
 	p.BottomSurface = Enum.SurfaceType.Smooth
@@ -770,7 +1004,25 @@ local function signOn(target: BasePart, face: Enum.NormalId, text: string, textC
 	label.Parent = sg
 end
 
--- Hollow building with a door. Built facing +Z, then rotated by `yaw`.
+local function light(parent: BasePart, range: number, brightness: number, color: Color3)
+	local l = Instance.new("PointLight")
+	l.Range = range
+	l.Brightness = brightness
+	l.Color = color
+	l.Parent = parent
+	CollectionService:AddTag(l, "NightLight")
+	return l
+end
+
+local function window(model: Model, cf: CFrame, w: number, h: number)
+	part({ Name = "WindowFrame", Size = Vector3.new(w + 0.6, h + 0.6, 0.3), CFrame = cf * CFrame.new(0, 0, 0.05), Color = Color3.fromRGB(230, 225, 210), Material = Enum.Material.Wood, Parent = model })
+	local glass = part({ Name = "Window", Size = Vector3.new(w, h, 0.3), CFrame = cf * CFrame.new(0, 0, -0.1), Color = Color3.fromRGB(70, 80, 95), Material = Enum.Material.Glass, Reflectance = 0.15, Parent = model })
+	CollectionService:AddTag(glass, "NightWindow")
+	part({ Name = "Mullion", Size = Vector3.new(0.15, h, 0.35), CFrame = cf * CFrame.new(0, 0, -0.15), Color = Color3.fromRGB(230, 225, 210), Material = Enum.Material.Wood, Parent = model })
+	part({ Name = "Sill", Size = Vector3.new(w + 1, 0.3, 0.8), CFrame = cf * CFrame.new(0, -h / 2 - 0.35, -0.3), Color = Color3.fromRGB(200, 195, 185), Parent = model })
+end
+
+-- Hollow building with a door, windows and a pitched roof. Built facing +Z, then rotated by `yaw`.
 local function building(name, center: Vector3, yaw: number, w, d, h, wallColor: Color3, roofColor: Color3, signText: string?)
 	local model = Instance.new("Model")
 	model.Name = name
@@ -780,16 +1032,9 @@ local function building(name, center: Vector3, yaw: number, w, d, h, wallColor: 
 	local doorW, doorH = 6, 9
 	local sideW = (w - doorW) / 2
 
-	local function wall(size, pos, mat)
-		return part({
-			Size = size,
-			Position = pos,
-			Color = wallColor,
-			Material = mat or Enum.Material.Brick,
-			Parent = model,
-		})
+	local function wall(size, pos)
+		return part({ Size = size, Position = pos, Color = wallColor, Material = Enum.Material.Brick, Parent = model })
 	end
-
 	wall(Vector3.new(w, h, t), mid + Vector3.new(0, 0, -d / 2))
 	wall(Vector3.new(t, h, d), mid + Vector3.new(-w / 2, 0, 0))
 	wall(Vector3.new(t, h, d), mid + Vector3.new(w / 2, 0, 0))
@@ -797,47 +1042,65 @@ local function building(name, center: Vector3, yaw: number, w, d, h, wallColor: 
 	wall(Vector3.new(sideW, h, t), mid + Vector3.new(doorW / 2 + sideW / 2, 0, d / 2))
 	wall(Vector3.new(doorW, h - doorH, t), Vector3.new(0, doorH + (h - doorH) / 2, d / 2))
 
-	part({
-		Name = "Roof",
-		Size = Vector3.new(w + 3, 1.2, d + 3),
-		Position = Vector3.new(0, h + 0.6, 0),
-		Color = roofColor,
-		Material = Enum.Material.Slate,
-		Parent = model,
-	})
-	part({
-		Name = "Floor",
-		Size = Vector3.new(w - 1, 0.3, d - 1),
-		Position = Vector3.new(0, 0.15, 0),
-		Color = Color3.fromRGB(110, 75, 50),
-		Material = Enum.Material.WoodPlanks,
-		Parent = model,
-	})
-	-- Warm light inside so it feels lived in at night.
-	local lamp = part({
-		Name = "Lamp",
-		Size = Vector3.new(1, 1, 1),
-		Position = Vector3.new(0, h - 1.5, 0),
-		Color = Color3.fromRGB(255, 200, 120),
-		Material = Enum.Material.Neon,
-		CanCollide = false,
-		Parent = model,
-	})
-	local light = Instance.new("PointLight")
-	light.Range = math.max(w, d)
-	light.Brightness = 1.5
-	light.Color = Color3.fromRGB(255, 190, 120)
-	light.Parent = lamp
+	-- Trim and foundation
+	local trim = Color3.fromRGB(225, 220, 205)
+	part({ Name = "Foundation", Size = Vector3.new(w + 1, 1, d + 1), Position = Vector3.new(0, 0.5, 0), Color = Color3.fromRGB(90, 88, 85), Material = Enum.Material.Concrete, CanCollide = false, Parent = model })
+	part({ Name = "Cornice", Size = Vector3.new(w + 1.4, 0.6, d + 1.4), Position = Vector3.new(0, h - 0.3, 0), Color = trim, Parent = model })
+	for _, x in { -doorW / 2 - 0.3, doorW / 2 + 0.3 } do
+		part({ Name = "DoorFrame", Size = Vector3.new(0.6, doorH, 0.6), Position = Vector3.new(x, doorH / 2, d / 2 + 0.2), Color = trim, Material = Enum.Material.Wood, Parent = model })
+	end
+	part({ Name = "DoorFrame", Size = Vector3.new(doorW + 1.2, 0.6, 0.6), Position = Vector3.new(0, doorH + 0.3, d / 2 + 0.2), Color = trim, Material = Enum.Material.Wood, Parent = model })
+	-- Open door swung inward
+	part({ Name = "Door", Size = Vector3.new(doorW - 0.4, doorH - 0.2, 0.3), CFrame = CFrame.new(-doorW / 2 + 0.3, doorH / 2, d / 2 - 0.3) * CFrame.Angles(0, math.rad(-80), 0) * CFrame.new((doorW - 0.4) / 2, 0, 0), Color = Color3.fromRGB(90, 40, 30), Material = Enum.Material.Wood, CanCollide = false, Parent = model })
+	part({ Name = "Step", Size = Vector3.new(doorW + 2, 0.5, 2), Position = Vector3.new(0, 0.25, d / 2 + 1.2), Color = Color3.fromRGB(120, 118, 112), Material = Enum.Material.Concrete, Parent = model })
+
+	-- Windows: front (two floors if tall) and sides
+	local floors = h >= 16 and { 4.5, h - 5 } or { 4.5 }
+	for _, y in floors do
+		for _, x in { -(doorW / 2 + sideW / 2), doorW / 2 + sideW / 2 } do
+			window(model, CFrame.new(x, y + 1, d / 2 + 0.5), math.min(4, sideW - 2), 3.5)
+		end
+		for _, side in { -1, 1 } do
+			for _, z in { -d / 4, d / 4 } do
+				window(model, CFrame.new(side * (w / 2 + 0.5), y + 1, z) * CFrame.Angles(0, side * math.rad(90), 0), 3.5, 3.5)
+			end
+		end
+	end
+
+	-- Pitched roof (two wedges meeting at the ridge)
+	local rh = math.max(5, d * 0.32)
+	local half = d / 2 + 1.5
+	part({ ClassName = "WedgePart", Name = "Roof", Size = Vector3.new(w + 2, rh, half), CFrame = CFrame.new(0, h + rh / 2, -half / 2), Color = roofColor, Material = Enum.Material.Slate, Parent = model })
+	part({ ClassName = "WedgePart", Name = "Roof", Size = Vector3.new(w + 2, rh, half), CFrame = CFrame.new(0, h + rh / 2, half / 2) * CFrame.Angles(0, math.pi, 0), Color = roofColor, Material = Enum.Material.Slate, Parent = model })
+	part({ Name = "Ceiling", Size = Vector3.new(w, 0.6, d), Position = Vector3.new(0, h + 0.1, 0), Color = Color3.fromRGB(60, 50, 45), Material = Enum.Material.Wood, Parent = model })
+	local chim = part({ Name = "Chimney", Size = Vector3.new(2.5, rh + 3, 2.5), Position = Vector3.new(w / 3, h + (rh + 3) / 2, -d / 5), Color = Color3.fromRGB(110, 60, 50), Material = Enum.Material.Brick, Parent = model })
+	local smoke = Instance.new("Smoke")
+	smoke.Color = Color3.fromRGB(120, 120, 125)
+	smoke.Opacity = 0.08
+	smoke.RiseVelocity = 3
+	smoke.Size = 2
+	local smokeAtt = part({ Name = "ChimneyTop", Size = Vector3.new(1, 0.2, 1), Position = chim.Position + Vector3.new(0, chim.Size.Y / 2 + 0.2, 0), Transparency = 1, CanCollide = false, Parent = model })
+	smoke.Parent = smokeAtt
+
+	part({ Name = "Floor", Size = Vector3.new(w - 1, 0.3, d - 1), Position = Vector3.new(0, 1.05, 0), Color = Color3.fromRGB(110, 75, 50), Material = Enum.Material.WoodPlanks, Parent = model })
+	part({ Name = "Rug", Size = Vector3.new(w * 0.4, 0.05, d * 0.4), Position = Vector3.new(0, 1.22, 0), Color = Color3.fromRGB(110, 20, 30), Material = Enum.Material.Fabric, CanCollide = false, Parent = model })
+	-- A table and chairs inside
+	part({ Name = "Table", Size = Vector3.new(4, 0.4, 3), Position = Vector3.new(-w / 4, 3.6, -d / 5), Color = Color3.fromRGB(80, 50, 30), Material = Enum.Material.Wood, Parent = model })
+	part({ Name = "TableLeg", Size = Vector3.new(0.6, 2.4, 0.6), Position = Vector3.new(-w / 4, 2.4, -d / 5), Color = Color3.fromRGB(70, 45, 28), Material = Enum.Material.Wood, Parent = model })
+	for _, dz in { -2.4, 2.4 } do
+		local seat = Instance.new("Seat")
+		seat.Anchored = true
+		seat.Size = Vector3.new(2, 0.4, 2)
+		seat.Position = Vector3.new(-w / 4, 2.6, -d / 5 + dz)
+		seat.Color = Color3.fromRGB(100, 60, 35)
+		seat.Material = Enum.Material.Wood
+		seat.Parent = model
+	end
+	local lamp = part({ Name = "Lamp", Size = Vector3.new(1.2, 1, 1.2), Position = Vector3.new(0, h - 1.5, 0), Color = Color3.fromRGB(255, 200, 120), Material = Enum.Material.Neon, CanCollide = false, Parent = model })
+	light(lamp, math.max(w, d), 1.5, Color3.fromRGB(255, 190, 120))
 
 	if signText then
-		local board = part({
-			Name = "Sign",
-			Size = Vector3.new(math.min(w - 4, 22), 3, 0.4),
-			Position = Vector3.new(0, doorH + 2, d / 2 + 0.8),
-			Color = Color3.fromRGB(40, 25, 20),
-			Material = Enum.Material.Wood,
-			Parent = model,
-		})
+		local board = part({ Name = "Sign", Size = Vector3.new(math.min(w - 4, 22), 3, 0.4), Position = Vector3.new(0, doorH + 2.4, d / 2 + 0.8), Color = Color3.fromRGB(40, 25, 20), Material = Enum.Material.Wood, Parent = model })
 		signOn(board, Enum.NormalId.Back, signText)
 	end
 
@@ -846,46 +1109,122 @@ local function building(name, center: Vector3, yaw: number, w, d, h, wallColor: 
 	return model
 end
 
-local function tree(pos: Vector3)
-	local h = rng:NextNumber(14, 26)
-	part({
-		Name = "Trunk",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(h, 2.2, 2.2),
-		CFrame = CFrame.new(pos + Vector3.new(0, h / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)),
-		Color = Color3.fromRGB(70, 50, 35),
-		Material = Enum.Material.Wood,
-	})
-	local r = rng:NextNumber(10, 16)
-	part({
-		Name = "Leaves",
-		Shape = Enum.PartType.Ball,
-		Size = Vector3.new(r, r, r),
-		Position = pos + Vector3.new(0, h, 0),
-		Color = Color3.fromRGB(25 + rng:NextInteger(0, 20), 55 + rng:NextInteger(0, 25), 30),
-		Material = Enum.Material.Grass,
-	})
+-- Attach extra pieces to a building in its local space (front = +Z).
+local function addTo(model: Model, props)
+	local pivot = model:GetPivot()
+	props.Parent = model
+	if props.CFrame then
+		props.CFrame = pivot * props.CFrame
+	end
+	return part(props)
+end
+
+local function oak(pos: Vector3)
+	local h = rng:NextNumber(12, 20)
+	part({ Name = "Trunk", Shape = Enum.PartType.Cylinder, Size = Vector3.new(h, 2.2, 2.2), CFrame = CFrame.new(pos + Vector3.new(0, h / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(70, 50, 35), Material = Enum.Material.Wood })
+	local base = Color3.fromRGB(28 + rng:NextInteger(0, 20), 58 + rng:NextInteger(0, 25), 32)
+	for i = 1, 3 do
+		local r = rng:NextNumber(8, 13)
+		local off = Vector3.new(rng:NextNumber(-3, 3), rng:NextNumber(-1, 3), rng:NextNumber(-3, 3))
+		part({ Name = "Leaves", Shape = Enum.PartType.Ball, Size = Vector3.new(r, r, r), Position = pos + Vector3.new(0, h, 0) + off * (i == 1 and 0 or 1), Color = base:Lerp(Color3.new(0, 0, 0), rng:NextNumber(0, 0.2)), Material = Enum.Material.Grass })
+	end
+end
+
+local function pine(pos: Vector3)
+	local h = rng:NextNumber(22, 34)
+	part({ Name = "Trunk", Size = Vector3.new(1.6, h * 0.5, 1.6), Position = pos + Vector3.new(0, h * 0.25, 0), Color = Color3.fromRGB(60, 42, 30), Material = Enum.Material.Wood })
+	local color = Color3.fromRGB(20, 45 + rng:NextInteger(0, 15), 30)
+	for i = 0, 4 do
+		local s = (1 - i / 5) * 13 + 2
+		local y = h * 0.25 + i * (h * 0.15)
+		part({ Name = "Needles", Size = Vector3.new(s, h * 0.18, s), CFrame = CFrame.new(pos + Vector3.new(0, y, 0)) * CFrame.Angles(0, math.rad(45 * (i % 2)), 0), Color = color, Material = Enum.Material.Grass })
+	end
+end
+
+local function rock(pos: Vector3, s: number)
+	part({ Name = "Rock", Size = Vector3.new(s, s * 0.7, s * 1.2), CFrame = CFrame.new(pos + Vector3.new(0, s * 0.25, 0)) * CFrame.Angles(rng:NextNumber(-0.3, 0.3), rng:NextNumber(0, 6), rng:NextNumber(-0.3, 0.3)), Color = Color3.fromRGB(95, 95, 100), Material = Enum.Material.Rock })
 end
 
 local function streetLamp(pos: Vector3)
-	part({
-		Size = Vector3.new(0.6, 12, 0.6),
-		Position = pos + Vector3.new(0, 6, 0),
-		Color = Color3.fromRGB(30, 30, 30),
-		Material = Enum.Material.Metal,
-	})
-	local bulb = part({
-		Size = Vector3.new(1.4, 1.4, 1.4),
-		Position = pos + Vector3.new(0, 12.5, 0),
-		Color = Color3.fromRGB(255, 220, 150),
-		Material = Enum.Material.Neon,
-		Shape = Enum.PartType.Ball,
-	})
-	local l = Instance.new("PointLight")
-	l.Range = 24
-	l.Brightness = 2
-	l.Color = Color3.fromRGB(255, 210, 140)
-	l.Parent = bulb
+	part({ Size = Vector3.new(1.2, 1, 1.2), Position = pos + Vector3.new(0, 0.5, 0), Color = Color3.fromRGB(25, 25, 25), Material = Enum.Material.Metal })
+	part({ Size = Vector3.new(0.5, 12, 0.5), Position = pos + Vector3.new(0, 6, 0), Color = Color3.fromRGB(30, 30, 30), Material = Enum.Material.Metal })
+	part({ Size = Vector3.new(1.8, 0.3, 1.8), Position = pos + Vector3.new(0, 13.6, 0), Color = Color3.fromRGB(25, 25, 25), Material = Enum.Material.Metal })
+	local bulb = part({ Name = "LampGlass", Size = Vector3.new(1.3, 1.5, 1.3), Position = pos + Vector3.new(0, 12.7, 0), Color = Color3.fromRGB(255, 220, 150), Material = Enum.Material.Neon })
+	CollectionService:AddTag(bulb, "NightWindow")
+	light(bulb, 26, 2, Color3.fromRGB(255, 210, 140))
+end
+
+local function bench(cf: CFrame)
+	local wood = Color3.fromRGB(110, 70, 40)
+	local seat = Instance.new("Seat")
+	seat.Anchored = true
+	seat.Size = Vector3.new(6, 0.4, 2)
+	seat.CFrame = cf * CFrame.new(0, 2, 0)
+	seat.Color = wood
+	seat.Material = Enum.Material.Wood
+	seat.Parent = mapFolder
+	part({ Size = Vector3.new(6, 2, 0.3), CFrame = cf * CFrame.new(0, 3.3, 0.9) * CFrame.Angles(math.rad(-10), 0, 0), Color = wood, Material = Enum.Material.Wood })
+	for _, x in { -2.6, 2.6 } do
+		part({ Size = Vector3.new(0.4, 2, 2), CFrame = cf * CFrame.new(x, 1, 0), Color = Color3.fromRGB(30, 30, 30), Material = Enum.Material.Metal })
+	end
+end
+
+local function car(cf: CFrame, color: Color3)
+	part({ Name = "CarBody", Size = Vector3.new(5.5, 2, 11), CFrame = cf * CFrame.new(0, 1.8, 0), Color = color, Material = Enum.Material.SmoothPlastic, Reflectance = 0.1 })
+	part({ Name = "CarCabin", Size = Vector3.new(5, 1.8, 5.5), CFrame = cf * CFrame.new(0, 3.7, 0.5), Color = color, Material = Enum.Material.SmoothPlastic })
+	part({ Name = "CarGlass", Size = Vector3.new(5.1, 1.4, 5.6), CFrame = cf * CFrame.new(0, 3.8, 0.5), Color = Color3.fromRGB(30, 35, 45), Material = Enum.Material.Glass, Transparency = 0.2 })
+	for _, x in { -2.6, 2.6 } do
+		for _, z in { -3.5, 3.5 } do
+			part({ Name = "Wheel", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.9, 2.2, 2.2), CFrame = cf * CFrame.new(x, 1.1, z), Color = Color3.fromRGB(20, 20, 20) })
+		end
+	end
+	for _, x in { -1.9, 1.9 } do
+		part({ Name = "Headlight", Size = Vector3.new(1, 0.5, 0.2), CFrame = cf * CFrame.new(x, 2, -5.55), Color = Color3.fromRGB(255, 250, 220), Material = Enum.Material.Neon })
+		part({ Name = "Taillight", Size = Vector3.new(1, 0.5, 0.2), CFrame = cf * CFrame.new(x, 2, 5.55), Color = Color3.fromRGB(200, 20, 20), Material = Enum.Material.Neon })
+	end
+end
+
+local function fence(from: Vector3, to: Vector3, gapAt: number?)
+	local dir = to - from
+	local len = dir.Magnitude
+	local n = math.floor(len / 4)
+	local iron = Color3.fromRGB(25, 25, 28)
+	for i = 0, n do
+		local p = from + dir.Unit * (i * len / n)
+		if not gapAt or math.abs(i - gapAt) > 1 then
+			part({ Name = "FencePost", Size = Vector3.new(0.4, 5, 0.4), Position = p + Vector3.new(0, 2.5, 0), Color = iron, Material = Enum.Material.Metal })
+			part({ ClassName = "WedgePart", Name = "FenceSpike", Size = Vector3.new(0.4, 0.8, 0.4), Position = p + Vector3.new(0, 5.4, 0), Color = iron, Material = Enum.Material.Metal })
+		end
+	end
+	local cf = CFrame.lookAt((from + to) / 2, to)
+	for _, y in { 1.2, 4.2 } do
+		if gapAt then
+			local gapPos = gapAt * len / n
+			local a = gapPos - 4
+			local b = len - gapPos - 4
+			part({ Name = "FenceRail", Size = Vector3.new(0.2, 0.25, a), CFrame = CFrame.lookAt(from + dir.Unit * (a / 2), to) + Vector3.new(0, y, 0), Color = iron, Material = Enum.Material.Metal })
+			part({ Name = "FenceRail", Size = Vector3.new(0.2, 0.25, b), CFrame = CFrame.lookAt(to - dir.Unit * (b / 2), to) + Vector3.new(0, y, 0), Color = iron, Material = Enum.Material.Metal })
+		else
+			part({ Name = "FenceRail", Size = Vector3.new(0.2, 0.25, len), CFrame = cf + Vector3.new(0, y, 0), Color = iron, Material = Enum.Material.Metal })
+		end
+	end
+end
+
+local function grave(pos: Vector3, style: number)
+	local stone = Color3.fromRGB(110 + rng:NextInteger(-15, 15), 110, 115)
+	local tilt = CFrame.Angles(math.rad(rng:NextNumber(-8, 8)), math.rad(90), math.rad(rng:NextNumber(-6, 6)))
+	if style == 1 then
+		local s = part({ Name = "Tombstone", Size = Vector3.new(3, 4, 0.8), CFrame = CFrame.new(pos + Vector3.new(0, 2, 0)) * tilt, Color = stone, Material = Enum.Material.Slate })
+		part({ Name = "TombTop", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.8, 3, 3), CFrame = s.CFrame * CFrame.new(0, 2, 0) * CFrame.Angles(0, math.rad(90), 0), Color = stone, Material = Enum.Material.Slate })
+		signOn(s, Enum.NormalId.Front, "R.I.P", Color3.fromRGB(60, 60, 65))
+	elseif style == 2 then
+		local cf = CFrame.new(pos + Vector3.new(0, 2.5, 0)) * tilt
+		part({ Name = "Cross", Size = Vector3.new(0.7, 5, 0.7), CFrame = cf, Color = stone, Material = Enum.Material.Slate })
+		part({ Name = "Cross", Size = Vector3.new(3, 0.7, 0.7), CFrame = cf * CFrame.new(0, 1, 0), Color = stone, Material = Enum.Material.Slate })
+	else
+		part({ Name = "Tombstone", Size = Vector3.new(2.5, 2.5, 0.8), CFrame = CFrame.new(pos + Vector3.new(0, 1.25, 0)) * tilt, Color = stone, Material = Enum.Material.Slate })
+	end
+	part({ Name = "GraveMound", Size = Vector3.new(5, 0.6, 2.6), CFrame = CFrame.new(pos + Vector3.new(-3, 0.3, 0)) * CFrame.Angles(0, math.rad(90), 0), Color = Color3.fromRGB(70, 55, 40), Material = Enum.Material.Ground })
 end
 
 local function setupLighting()
@@ -894,9 +1233,11 @@ local function setupLighting()
 	Lighting.Ambient = Color3.fromRGB(40, 40, 55)
 	Lighting.OutdoorAmbient = Color3.fromRGB(90, 90, 110)
 	Lighting.GlobalShadows = true
+	Lighting.EnvironmentDiffuseScale = 0.5
+	Lighting.EnvironmentSpecularScale = 0.5
 
 	local atmo = Instance.new("Atmosphere")
-	atmo.Density = 0.38
+	atmo.Density = 0.36
 	atmo.Haze = 2
 	atmo.Glare = 0.2
 	atmo.Color = Color3.fromRGB(170, 175, 200)
@@ -908,6 +1249,15 @@ local function setupLighting()
 	sky.MoonAngularSize = 11
 	sky.StarCount = 4000
 	sky.Parent = Lighting
+
+	local bloom = Instance.new("BloomEffect")
+	bloom.Intensity = 0.6
+	bloom.Size = 30
+	bloom.Threshold = 1.6
+	bloom.Parent = Lighting
+	local sun = Instance.new("SunRaysEffect")
+	sun.Intensity = 0.08
+	sun.Parent = Lighting
 end
 
 function MapBuilder.Build()
@@ -917,80 +1267,137 @@ function MapBuilder.Build()
 
 	setupLighting()
 
-	-- Ground
-	part({
-		Name = "Ground",
-		Size = Vector3.new(800, 2, 800),
-		Position = Vector3.new(0, -1, 0),
-		Color = Color3.fromRGB(55, 80, 45),
-		Material = Enum.Material.Grass,
-	})
+	part({ Name = "Ground", Size = Vector3.new(800, 2, 800), Position = Vector3.new(0, -1, 0), Color = Color3.fromRGB(55, 80, 45), Material = Enum.Material.Grass })
 
-	-- Town square
-	part({
-		Name = "Square",
-		Size = Vector3.new(70, 0.2, 70),
-		Position = Vector3.new(0, 0.1, 0),
-		Color = Color3.fromRGB(120, 115, 110),
-		Material = Enum.Material.Cobblestone,
-	})
-	-- Roads
+	-- Town square, roads, sidewalks
+	part({ Name = "Square", Size = Vector3.new(70, 0.2, 70), Position = Vector3.new(0, 0.1, 0), Color = Color3.fromRGB(120, 115, 110), Material = Enum.Material.Cobblestone })
 	part({ Name = "MainStreet", Size = Vector3.new(400, 0.15, 14), Position = Vector3.new(0, 0.08, 0), Color = Color3.fromRGB(45, 45, 50), Material = Enum.Material.Asphalt })
-	part({ Name = "CrossStreet", Size = Vector3.new(14, 0.15, 300), Position = Vector3.new(0, 0.08, -60), Color = Color3.fromRGB(45, 45, 50), Material = Enum.Material.Asphalt })
+	part({ Name = "CrossStreet", Size = Vector3.new(14, 0.15, 158), Position = Vector3.new(0, 0.08, -79), Color = Color3.fromRGB(45, 45, 50), Material = Enum.Material.Asphalt })
+	part({ Name = "FallsPath", Size = Vector3.new(8, 0.12, 170), Position = Vector3.new(0, 0.07, 120), Color = Color3.fromRGB(105, 85, 60), Material = Enum.Material.Ground })
+	for x = -190, 190, 12 do
+		if math.abs(x) > 38 then
+			part({ Name = "RoadLine", Size = Vector3.new(5, 0.05, 0.4), Position = Vector3.new(x, 0.17, 0), Color = Color3.fromRGB(220, 200, 90), Material = Enum.Material.SmoothPlastic, CanCollide = false })
+		end
+	end
+	for _, z in { -9, 9 } do
+		part({ Name = "Sidewalk", Size = Vector3.new(400, 0.5, 4), Position = Vector3.new(0, 0.25, z), Color = Color3.fromRGB(150, 148, 140), Material = Enum.Material.Concrete })
+	end
 
-	-- Fountain in the square
+	-- Fountain with spray
 	part({ Name = "FountainBase", Shape = Enum.PartType.Cylinder, Size = Vector3.new(2, 16, 16), CFrame = CFrame.new(0, 1, 18) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(150, 150, 155), Material = Enum.Material.Marble })
-	local water = part({ Name = "FountainWater", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 14, 14), CFrame = CFrame.new(0, 2.05, 18) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(60, 110, 160), Material = Enum.Material.Glass, Transparency = 0.3, CanCollide = false })
-	water.Reflectance = 0.3
+	part({ Name = "FountainWater", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 14, 14), CFrame = CFrame.new(0, 2.05, 18) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(60, 110, 160), Material = Enum.Material.Glass, Transparency = 0.3, CanCollide = false, Reflectance = 0.3 })
 	part({ Name = "FountainPillar", Size = Vector3.new(2, 6, 2), Position = Vector3.new(0, 4, 18), Color = Color3.fromRGB(160, 160, 165), Material = Enum.Material.Marble })
+	local bowl = part({ Name = "FountainBowl", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.8, 6, 6), CFrame = CFrame.new(0, 7, 18) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(160, 160, 165), Material = Enum.Material.Marble })
+	local spray = Instance.new("ParticleEmitter")
+	spray.Color = ColorSequence.new(Color3.fromRGB(200, 220, 255))
+	spray.Transparency = NumberSequence.new(0.3, 1)
+	spray.Size = NumberSequence.new(0.4, 0.1)
+	spray.Speed = NumberRange.new(6, 9)
+	spray.SpreadAngle = Vector2.new(25, 25)
+	spray.Acceleration = Vector3.new(0, -25, 0)
+	spray.Lifetime = NumberRange.new(0.8, 1.2)
+	spray.Rate = 60
+	spray.EmissionDirection = Enum.NormalId.Top
+	local sprayAtt = Instance.new("Attachment")
+	sprayAtt.Parent = bowl
+	sprayAtt.WorldCFrame = CFrame.new(0, 7.5, 18)
+	spray.Parent = sprayAtt
+	for i = 0, 3 do
+		local a = i * math.pi / 2 + math.pi / 4
+		bench(CFrame.new(math.cos(a) * 24, 0, math.sin(a) * 24 + 4) * CFrame.Angles(0, -a - math.pi / 2, 0))
+	end
 
-	-- Clock tower
-	local tower = part({ Name = "ClockTower", Size = Vector3.new(10, 44, 10), Position = Vector3.new(0, 22, -22), Color = Color3.fromRGB(130, 90, 70), Material = Enum.Material.Brick })
-	signOn(tower, Enum.NormalId.Back, "🕰\nMOONLIT FALLS\nest. 1864")
+	-- Clock tower with a real clock face (the client turns the hands).
+	part({ Name = "ClockTower", Size = Vector3.new(10, 44, 10), Position = Vector3.new(0, 22, -22), Color = Color3.fromRGB(130, 90, 70), Material = Enum.Material.Brick })
+	part({ Name = "TowerBand", Size = Vector3.new(11, 1, 11), Position = Vector3.new(0, 30, -22), Color = Color3.fromRGB(200, 195, 180) })
 	part({ Name = "TowerTop", Size = Vector3.new(12, 2, 12), Position = Vector3.new(0, 45, -22), Color = Color3.fromRGB(50, 50, 60), Material = Enum.Material.Slate })
+	part({ ClassName = "WedgePart", Name = "Spire", Size = Vector3.new(12, 10, 6), CFrame = CFrame.new(0, 51, -25), Color = Color3.fromRGB(40, 40, 50), Material = Enum.Material.Slate })
+	part({ ClassName = "WedgePart", Name = "Spire", Size = Vector3.new(12, 10, 6), CFrame = CFrame.new(0, 51, -19) * CFrame.Angles(0, math.pi, 0), Color = Color3.fromRGB(40, 40, 50), Material = Enum.Material.Slate })
+	local face = part({ Name = "ClockFace", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 7, 7), CFrame = CFrame.new(0, 37, -16.8) * CFrame.Angles(0, math.rad(90), 0), Color = Color3.fromRGB(245, 235, 200), Material = Enum.Material.Neon })
+	CollectionService:AddTag(face, "NightWindow")
+	for i = 0, 11 do
+		local a = i / 12 * math.pi * 2
+		part({ Name = "ClockTick", Size = Vector3.new(0.25, i % 3 == 0 and 0.9 or 0.5, 0.1), CFrame = CFrame.new(0, 37, -16.55) * CFrame.Angles(0, 0, -a) * CFrame.new(0, 2.9, 0), Color = Color3.fromRGB(20, 20, 20), CanCollide = false })
+	end
+	local clock = Instance.new("Model")
+	clock.Name = "ClockHands"
+	clock.Parent = mapFolder
+	clock:SetAttribute("Center", Vector3.new(0, 37, -16.45))
+	part({ Name = "HourHand", Size = Vector3.new(0.35, 1.9, 0.1), Position = Vector3.new(0, 37.9, -16.45), Color = Color3.fromRGB(15, 15, 15), CanCollide = false, Parent = clock })
+	part({ Name = "MinuteHand", Size = Vector3.new(0.22, 2.8, 0.1), Position = Vector3.new(0, 38.4, -16.4), Color = Color3.fromRGB(15, 15, 15), CanCollide = false, Parent = clock })
+	signOn(part({ Name = "TowerPlaque", Size = Vector3.new(8, 3, 0.3), Position = Vector3.new(0, 26, -16.8), Color = Color3.fromRGB(40, 30, 25) }), Enum.NormalId.Back, "MOONLIT FALLS · 1864")
 
 	-- Town buildings around the square
-	building("Moonlit Grill", Vector3.new(-48, 0, 50), math.pi, 32, 22, 14, Color3.fromRGB(120, 60, 45), Color3.fromRGB(40, 35, 35), "🍔 MOONLIT GRILL")
-	building("Old Library", Vector3.new(48, 0, 50), math.pi, 30, 22, 16, Color3.fromRGB(140, 130, 115), Color3.fromRGB(60, 50, 45), "📚 OLD LIBRARY")
+	local grill = building("Moonlit Grill", Vector3.new(-48, 0, 50), math.pi, 32, 22, 14, Color3.fromRGB(120, 60, 45), Color3.fromRGB(40, 35, 35), "🍔 MOONLIT GRILL")
+	for i = 0, 7 do
+		addTo(grill, { Name = "Awning", Size = Vector3.new(30 / 8, 0.3, 4), CFrame = CFrame.new(-15 + 30 / 16 + i * 30 / 8, 11, 13) * CFrame.Angles(math.rad(-20), 0, 0), Color = i % 2 == 0 and Color3.fromRGB(170, 20, 30) or Color3.fromRGB(240, 235, 225), Material = Enum.Material.Fabric })
+	end
+	local lib = building("Old Library", Vector3.new(48, 0, 50), math.pi, 30, 22, 16, Color3.fromRGB(140, 130, 115), Color3.fromRGB(60, 50, 45), "📚 OLD LIBRARY")
+	for _, x in { -12, -7, 7, 12 } do
+		addTo(lib, { Name = "Column", Shape = Enum.PartType.Cylinder, Size = Vector3.new(15, 1.6, 1.6), CFrame = CFrame.new(x, 7.5, 13) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(225, 220, 210), Material = Enum.Material.Marble })
+	end
+	addTo(lib, { Name = "Portico", Size = Vector3.new(30, 1, 5), CFrame = CFrame.new(0, 15.5, 13), Color = Color3.fromRGB(225, 220, 210), Material = Enum.Material.Marble })
 	building("Sheriff Office", Vector3.new(-48, 0, -55), 0, 28, 20, 13, Color3.fromRGB(150, 150, 140), Color3.fromRGB(30, 40, 60), "⭐ SHERIFF")
-	building("Falls High School", Vector3.new(52, 0, -58), 0, 40, 24, 18, Color3.fromRGB(150, 70, 60), Color3.fromRGB(40, 40, 40), "🎓 FALLS HIGH")
-	building("Ravencroft Boarding House", Vector3.new(0, 0, -180), 0, 46, 30, 22, Color3.fromRGB(95, 85, 75), Color3.fromRGB(30, 25, 25), "🦇 RAVENCROFT HOUSE")
+	car(CFrame.new(-28, 0, -40), Color3.fromRGB(240, 240, 240))
+	part({ Name = "Siren", Size = Vector3.new(3, 0.5, 0.8), Position = Vector3.new(-28, 4.85, -39.5), Color = Color3.fromRGB(220, 30, 30), Material = Enum.Material.Neon })
+	local school = building("Falls High School", Vector3.new(52, 0, -58), 0, 40, 24, 18, Color3.fromRGB(150, 70, 60), Color3.fromRGB(40, 40, 40), "🎓 FALLS HIGH")
+	addTo(school, { Name = "Flagpole", Size = Vector3.new(0.4, 22, 0.4), CFrame = CFrame.new(-24, 11, 16), Color = Color3.fromRGB(200, 200, 200), Material = Enum.Material.Metal })
+	addTo(school, { Name = "Flag", Size = Vector3.new(0.1, 3, 5), CFrame = CFrame.new(-24, 20.5, 18.6), Color = Color3.fromRGB(130, 20, 30), Material = Enum.Material.Fabric })
+	car(CFrame.new(28, 0, -38) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(40, 60, 110))
+	car(CFrame.new(-70, 0, 20) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(120, 25, 25))
 
-	for _, p in { Vector3.new(-30, 0, -30), Vector3.new(30, 0, -30), Vector3.new(-30, 0, 30), Vector3.new(30, 0, 30), Vector3.new(-90, 0, 9), Vector3.new(90, 0, 9), Vector3.new(9, 0, -110) } do
+	-- Ravencroft Boarding House: big old mansion with a porch.
+	local house = building("Ravencroft Boarding House", Vector3.new(0, 0, -180), 0, 46, 30, 22, Color3.fromRGB(95, 85, 75), Color3.fromRGB(30, 25, 25), "🦇 RAVENCROFT HOUSE")
+	addTo(house, { Name = "PorchFloor", Size = Vector3.new(30, 1, 7), CFrame = CFrame.new(0, 0.5, 18.5), Color = Color3.fromRGB(80, 60, 45), Material = Enum.Material.WoodPlanks })
+	addTo(house, { Name = "PorchRoof", Size = Vector3.new(32, 0.8, 8), CFrame = CFrame.new(0, 11.5, 18.5), Color = Color3.fromRGB(30, 25, 25), Material = Enum.Material.Slate })
+	for _, x in { -14, -7, 7, 14 } do
+		addTo(house, { Name = "PorchColumn", Size = Vector3.new(1, 10.5, 1), CFrame = CFrame.new(x, 6, 21.5), Color = Color3.fromRGB(220, 215, 205), Material = Enum.Material.Wood })
+	end
+	car(CFrame.new(28, 0, -150) * CFrame.Angles(0, math.rad(15), 0), Color3.fromRGB(20, 20, 25))
+
+	for _, p in { Vector3.new(-30, 0, -30), Vector3.new(30, 0, -30), Vector3.new(-30, 0, 30), Vector3.new(30, 0, 30), Vector3.new(-70, 0, 11), Vector3.new(70, 0, 11), Vector3.new(-120, 0, -11), Vector3.new(120, 0, -11), Vector3.new(9, 0, -110), Vector3.new(-9, 0, -150), Vector3.new(6, 0, 100) } do
 		streetLamp(p)
 	end
 
-	-- Old cemetery (west)
+	-- Old cemetery (west) with an iron fence, graves, a crypt and an angel.
 	local cx, cz = -150, 0
 	part({ Name = "CemeteryGround", Size = Vector3.new(70, 0.2, 60), Position = Vector3.new(cx, 0.1, cz), Color = Color3.fromRGB(60, 65, 50), Material = Enum.Material.Ground })
-	for i = -3, 3 do
+	fence(Vector3.new(cx + 35, 0, cz - 30), Vector3.new(cx + 35, 0, cz + 30), 7)
+	fence(Vector3.new(cx - 35, 0, cz - 30), Vector3.new(cx + 35, 0, cz - 30))
+	fence(Vector3.new(cx - 35, 0, cz + 30), Vector3.new(cx + 35, 0, cz + 30))
+	fence(Vector3.new(cx - 35, 0, cz - 30), Vector3.new(cx - 35, 0, cz + 30))
+	for i = -2, 3 do
 		for j = -2, 2 do
-			local stone = part({
-				Name = "Tombstone",
-				Size = Vector3.new(3, rng:NextNumber(3, 5), 0.8),
-				Position = Vector3.new(cx + i * 8, 2, cz + j * 10),
-				Color = Color3.fromRGB(110, 110, 115),
-				Material = Enum.Material.Slate,
-			})
-			stone.Orientation = Vector3.new(rng:NextNumber(-6, 6), 90, rng:NextNumber(-6, 6))
+			if not (i == 0 and j == 0) then
+				grave(Vector3.new(cx + i * 9, 0, cz + j * 10 + rng:NextNumber(-1, 1)), rng:NextInteger(1, 3))
+			end
 		end
 	end
-	local crypt = building("Founders Crypt", Vector3.new(cx - 28, 0, cz), math.pi / 2, 14, 12, 10, Color3.fromRGB(90, 90, 95), Color3.fromRGB(50, 50, 55), "⚰ CRYPT")
-	crypt:SetAttribute("Shade", true)
+	part({ Name = "StatueBase", Size = Vector3.new(3, 3, 3), Position = Vector3.new(cx, 1.5, cz), Color = Color3.fromRGB(130, 130, 135), Material = Enum.Material.Marble })
+	part({ Name = "Statue", Size = Vector3.new(1.6, 4, 1.2), Position = Vector3.new(cx, 5, cz), Color = Color3.fromRGB(170, 170, 175), Material = Enum.Material.Marble })
+	part({ Name = "StatueHead", Shape = Enum.PartType.Ball, Size = Vector3.new(1.2, 1.2, 1.2), Position = Vector3.new(cx, 7.6, cz), Color = Color3.fromRGB(170, 170, 175), Material = Enum.Material.Marble })
+	for _, s in { -1, 1 } do
+		part({ ClassName = "WedgePart", Name = "Wing", Size = Vector3.new(0.3, 4, 2.5), CFrame = CFrame.new(cx + s * 1.2, 6, cz + 0.8) * CFrame.Angles(0, 0, math.rad(s * 20)), Color = Color3.fromRGB(170, 170, 175), Material = Enum.Material.Marble })
+	end
+	building("Founders Crypt", Vector3.new(cx - 26, 0, cz), math.pi / 2, 14, 12, 10, Color3.fromRGB(90, 90, 95), Color3.fromRGB(50, 50, 55), "⚰ CRYPT")
 
-	-- Vervain field (east, at the forest edge). Purple flowers with a pick-up prompt.
+	-- Vervain field (east, at the forest edge).
 	local vervainPrompts = {}
-	for i = 1, 10 do
+	fence(Vector3.new(108, 0, 58), Vector3.new(108, 0, 102), 5)
+	for i = 1, 12 do
 		local pos = Vector3.new(130 + rng:NextNumber(-18, 18), 0, 80 + rng:NextNumber(-18, 18))
-		local plant = part({
-			Name = "Vervain",
-			Size = Vector3.new(1.6, 2.2, 1.6),
-			Position = pos + Vector3.new(0, 1.1, 0),
-			Color = Color3.fromRGB(150, 90, 210),
-			Material = Enum.Material.Neon,
-			Shape = Enum.PartType.Ball,
-			CanCollide = false,
-		})
+		local plant = part({ Name = "Vervain", Size = Vector3.new(1.4, 1.4, 1.4), Position = pos + Vector3.new(0, 2.2, 0), Color = Color3.fromRGB(150, 90, 210), Material = Enum.Material.Neon, Shape = Enum.PartType.Ball, CanCollide = false })
+		local stem = part({ Name = "VervainStem", Size = Vector3.new(0.3, 2, 0.3), Position = pos + Vector3.new(0, 1, 0), Color = Color3.fromRGB(50, 110, 50), CanCollide = false })
+		stem:SetAttribute("PlantStem", true)
+		for k = 1, 3 do
+			local a = k * 2.1
+			part({ Name = "VervainLeaf", Size = Vector3.new(0.9, 0.1, 0.4), CFrame = CFrame.new(pos + Vector3.new(0, 0.5 + k * 0.4, 0)) * CFrame.Angles(0, a, math.rad(25)) * CFrame.new(0.4, 0, 0), Color = Color3.fromRGB(60, 130, 60), CanCollide = false, Parent = plant })
+		end
+		local glow = Instance.new("PointLight")
+		glow.Color = Color3.fromRGB(170, 110, 255)
+		glow.Range = 6
+		glow.Brightness = 1
+		glow.Parent = plant
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "เก็บเวอร์เวน"
 		prompt.ObjectText = "🌿 Vervain"
@@ -1003,56 +1410,99 @@ function MapBuilder.Build()
 	fieldSign.Orientation = Vector3.new(0, 90, 0)
 	signOn(fieldSign, Enum.NormalId.Front, "🌿 VERVAIN FIELD")
 	signOn(fieldSign, Enum.NormalId.Back, "🌿 VERVAIN FIELD")
+	-- Old greenhouse shed next to the field
+	building("Herb Shed", Vector3.new(165, 0, 50), math.pi, 14, 10, 9, Color3.fromRGB(110, 90, 70), Color3.fromRGB(50, 60, 50), nil)
 
 	-- Witch ruins deep in the woods: a daylight ring for vampires.
 	local wx, wz = -120, -220
 	for i = 0, 7 do
 		local a = i / 8 * math.pi * 2
-		part({
-			Name = "RuinStone",
-			Size = Vector3.new(3, rng:NextNumber(5, 9), 3),
-			Position = Vector3.new(wx + math.cos(a) * 14, 3, wz + math.sin(a) * 14),
-			Color = Color3.fromRGB(85, 85, 90),
-			Material = Enum.Material.Rock,
-		})
+		local h = rng:NextNumber(5, 9)
+		part({ Name = "RuinStone", Size = Vector3.new(3, h, 3), CFrame = CFrame.new(wx + math.cos(a) * 14, h / 2, wz + math.sin(a) * 14) * CFrame.Angles(rng:NextNumber(-0.1, 0.1), a, rng:NextNumber(-0.1, 0.1)), Color = Color3.fromRGB(85, 85, 90), Material = Enum.Material.Rock })
+		if i % 2 == 0 then
+			local candle = part({ Name = "Candle", Size = Vector3.new(0.4, 1, 0.4), Position = Vector3.new(wx + math.cos(a) * 9, 0.5, wz + math.sin(a) * 9), Color = Color3.fromRGB(240, 235, 220) })
+			local flame = Instance.new("Fire")
+			flame.Size = 1
+			flame.Heat = 2
+			flame.Parent = candle
+		end
 	end
+	part({ Name = "RuneCircle", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, 20, 20), CFrame = CFrame.new(wx, 0.06, wz) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(70, 40, 110), Material = Enum.Material.Neon, Transparency = 0.6, CanCollide = false })
 	local altar = part({ Name = "Altar", Size = Vector3.new(6, 3, 4), Position = Vector3.new(wx, 1.5, wz), Color = Color3.fromRGB(70, 65, 70), Material = Enum.Material.Rock })
-	local ring = part({
-		Name = "DaylightRing",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.3, 1.4, 1.4),
-		Position = Vector3.new(wx, 3.4, wz),
-		Color = Color3.fromRGB(80, 140, 255),
-		Material = Enum.Material.Neon,
-		CanCollide = false,
-	})
+	local ring = part({ Name = "DaylightRing", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 1.4, 1.4), Position = Vector3.new(wx, 3.6, wz), Color = Color3.fromRGB(80, 140, 255), Material = Enum.Material.Neon, CanCollide = false })
+	ring:SetAttribute("Spin", true)
 	local glow = Instance.new("PointLight")
 	glow.Color = Color3.fromRGB(90, 150, 255)
 	glow.Range = 18
 	glow.Brightness = 3
 	glow.Parent = ring
+	local sparkle = Instance.new("Sparkles")
+	sparkle.SparkleColor = Color3.fromRGB(120, 170, 255)
+	sparkle.Parent = ring
 	local ringPrompt = Instance.new("ProximityPrompt")
 	ringPrompt.ActionText = "สวมแหวนกันแดด"
 	ringPrompt.ObjectText = "💍 Daylight Ring"
 	ringPrompt.HoldDuration = 3
 	ringPrompt.MaxActivationDistance = 10
 	ringPrompt.Parent = altar
-	local ruinSign = part({ Size = Vector3.new(10, 3, 0.4), Position = Vector3.new(wx, 3, wz + 22), Color = Color3.fromRGB(40, 25, 20), Material = Enum.Material.Wood })
-	signOn(ruinSign, Enum.NormalId.Back, "🔮 WITCH RUINS")
+	local grimoire = part({ Name = "Grimoire", Size = Vector3.new(1.6, 0.4, 1.2), CFrame = CFrame.new(wx - 1.8, 3.2, wz) * CFrame.Angles(0, 0.4, 0), Color = Color3.fromRGB(70, 30, 25), Material = Enum.Material.Fabric })
+	grimoire:SetAttribute("Book", true)
+	signOn(part({ Size = Vector3.new(10, 3, 0.4), Position = Vector3.new(wx, 3, wz + 22), Color = Color3.fromRGB(40, 25, 20), Material = Enum.Material.Wood }), Enum.NormalId.Back, "🔮 WITCH RUINS")
+
+	-- The falls (south): rock cliff, waterfall and a pond.
+	local terrain = workspace.Terrain
+	local fz = 230
+	terrain:FillBlock(CFrame.new(0, 22, fz + 22), Vector3.new(140, 44, 30), Enum.Material.Rock)
+	terrain:FillBlock(CFrame.new(-55, 14, fz + 4), Vector3.new(30, 28, 20), Enum.Material.Rock)
+	terrain:FillBlock(CFrame.new(55, 14, fz + 4), Vector3.new(30, 28, 20), Enum.Material.Rock)
+	terrain:FillBlock(CFrame.new(0, 1.5, fz - 6), Vector3.new(76, 3, 36), Enum.Material.Water)
+	for i = -4, 4 do
+		terrain:FillBall(Vector3.new(i * 9, 1, fz - 25 + math.abs(i) * 1.5), 4, Enum.Material.Rock)
+	end
+	local fall = part({ Name = "Waterfall", Size = Vector3.new(16, 42, 1), Position = Vector3.new(0, 21, fz + 6.5), Color = Color3.fromRGB(170, 205, 235), Material = Enum.Material.Glass, Transparency = 0.25, CanCollide = false, Reflectance = 0.2 })
+	local foam = Instance.new("ParticleEmitter")
+	foam.Color = ColorSequence.new(Color3.fromRGB(235, 245, 255))
+	foam.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 1) })
+	foam.Size = NumberSequence.new(3, 7)
+	foam.Speed = NumberRange.new(4, 8)
+	foam.SpreadAngle = Vector2.new(70, 70)
+	foam.Lifetime = NumberRange.new(1.5, 2.5)
+	foam.Rate = 40
+	foam.EmissionDirection = Enum.NormalId.Top
+	local foamAtt = Instance.new("Attachment")
+	foamAtt.Parent = fall
+	foamAtt.WorldCFrame = CFrame.new(0, 2, fz + 4)
+	foam.Parent = foamAtt
+	local stream = Instance.new("ParticleEmitter")
+	stream.Color = ColorSequence.new(Color3.fromRGB(210, 230, 255))
+	stream.Transparency = NumberSequence.new(0.5, 0.9)
+	stream.Size = NumberSequence.new(2, 3)
+	stream.Speed = NumberRange.new(20, 26)
+	stream.Acceleration = Vector3.new(0, -10, 0)
+	stream.Lifetime = NumberRange.new(1.5, 1.8)
+	stream.Rate = 50
+	stream.EmissionDirection = Enum.NormalId.Bottom
+	local streamAtt = Instance.new("Attachment")
+	streamAtt.Parent = fall
+	streamAtt.WorldCFrame = CFrame.new(0, 42, fz + 5)
+	stream.Parent = streamAtt
+	local fallSign = part({ Size = Vector3.new(12, 3, 0.4), Position = Vector3.new(14, 3, fz - 30), Color = Color3.fromRGB(40, 25, 20), Material = Enum.Material.Wood })
+	signOn(fallSign, Enum.NormalId.Front, "🌊 MOONLIT FALLS")
+	signOn(fallSign, Enum.NormalId.Back, "🌊 MOONLIT FALLS")
 
 	-- Forest all around town, leaving clearings for the landmarks.
 	local clearings = {
 		{ Vector3.new(0, 0, 0), 115 },
 		{ Vector3.new(cx, 0, cz), 50 },
-		{ Vector3.new(130, 0, 80), 30 },
+		{ Vector3.new(140, 0, 70), 48 },
 		{ Vector3.new(wx, 0, wz), 26 },
-		{ Vector3.new(0, 0, -180), 36 },
-		{ Vector3.new(0, 0, -100), 14 },
+		{ Vector3.new(0, 0, -180), 40 },
+		{ Vector3.new(0, 0, fz), 80 },
 	}
 	local placed = 0
-	while placed < 220 do
+	while placed < 240 do
 		local pos = Vector3.new(rng:NextNumber(-380, 380), 0, rng:NextNumber(-380, 380))
-		local ok = math.abs(pos.Z) > 10 and math.abs(pos.X) > 10 -- keep roads clear
+		local ok = math.abs(pos.Z) > 14 and math.abs(pos.X) > 14 -- keep roads clear
 		for _, c in clearings do
 			if (pos - c[1]).Magnitude < c[2] then
 				ok = false
@@ -1060,10 +1510,49 @@ function MapBuilder.Build()
 			end
 		end
 		if ok then
-			tree(pos)
+			if rng:NextNumber() < 0.55 then
+				pine(pos)
+			else
+				oak(pos)
+			end
 			placed += 1
+			if rng:NextNumber() < 0.3 then
+				rock(pos + Vector3.new(rng:NextNumber(-6, 6), 0, rng:NextNumber(-6, 6)), rng:NextNumber(2, 5))
+			end
 		end
 	end
+	-- A few bushes and flower beds in town
+	for _ = 1, 30 do
+		local a = rng:NextNumber(0, math.pi * 2)
+		local r = rng:NextNumber(40, 100)
+		local p = Vector3.new(math.cos(a) * r, 0, math.sin(a) * r)
+		if math.abs(p.Z) > 14 and math.abs(p.X) > 10 then
+			local s = rng:NextNumber(2.5, 4)
+			part({ Name = "Bush", Shape = Enum.PartType.Ball, Size = Vector3.new(s, s, s), Position = p + Vector3.new(0, s * 0.35, 0), Color = Color3.fromRGB(40, 85, 40), Material = Enum.Material.Grass })
+		end
+	end
+
+	-- Invisible markers the client uses for ambience.
+	local markers = Instance.new("Folder")
+	markers.Name = "AmbienceMarkers"
+	markers.Parent = mapFolder
+	local function marker(name, pos)
+		local m = Instance.new("Part")
+		m.Name = name
+		m.Anchored = true
+		m.CanCollide = false
+		m.CanQuery = false
+		m.Transparency = 1
+		m.Size = Vector3.new(1, 1, 1)
+		m.Position = pos
+		m.Parent = markers
+	end
+	marker("Cemetery", Vector3.new(cx, 0, cz))
+	marker("BatRoost", Vector3.new(0, 48, -22))
+	marker("Forest", Vector3.new(160, 0, -120))
+	marker("Forest", Vector3.new(-200, 0, 150))
+	marker("Forest", Vector3.new(wx, 0, wz))
+	marker("Forest", Vector3.new(200, 0, 200))
 
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Anchored = true
@@ -1075,7 +1564,6 @@ function MapBuilder.Build()
 	spawn.Duration = 3
 	spawn.Parent = mapFolder
 
-	-- Where townsfolk like to walk.
 	local wanderPoints = {}
 	for _ = 1, 40 do
 		local a = rng:NextNumber(0, math.pi * 2)
@@ -1092,8 +1580,287 @@ end
 
 return MapBuilder
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX00000008"><Properties><string name="Name">NPCs</string><ProtectedString name="Source"><![CDATA[-- Townsfolk who wander the square. Vampires feed on them, some secretly carry vervain.
+<Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">Models</string><ProtectedString name="Source"><![CDATA[-- Character models built from parts: werewolf body, vampire cape/eyes/fangs,
+-- townsfolk hair and hats, and speech bubbles.
+local Models = {}
+
+local rng = Random.new()
+
+local function cosmetic(props): BasePart
+	local p = Instance.new(props.ClassName or "Part")
+	props.ClassName = nil
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.Massless = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	local parent = props.Parent
+	props.Parent = nil
+	for k, v in props do
+		p[k] = v
+	end
+	p.Parent = parent
+	return p
+end
+
+-- Welds `part` to `to` at an offset (in `to`'s space) and returns the weld.
+local function weldAt(to: BasePart, part: BasePart, offset: CFrame, name: string?)
+	part.CFrame = to.CFrame * offset
+	local w = Instance.new("Weld")
+	w.Name = name or "CosmeticWeld"
+	w.Part0 = to
+	w.Part1 = part
+	w.C0 = offset
+	w.Parent = part
+	return w
+end
+
+local function glue(to: BasePart, part: BasePart)
+	local wc = Instance.new("WeldConstraint")
+	wc.Part0 = to
+	wc.Part1 = part
+	wc.Parent = part
+end
+
+---------------------------------------------------------------- speech bubble
+function Models.Say(model: Model, text: string, color: Color3?)
+	local head = model:FindFirstChild("Head")
+	if not head then
+		return
+	end
+	local old = head:FindFirstChild("Speech")
+	if old then
+		old:Destroy()
+	end
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "Speech"
+	bb.Size = UDim2.fromOffset(220, 50)
+	bb.StudsOffset = Vector3.new(0, 3.2, 0)
+	bb.MaxDistance = 70
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundColor3 = Color3.fromRGB(250, 248, 240)
+	label.BackgroundTransparency = 0.1
+	label.TextColor3 = color or Color3.fromRGB(30, 25, 30)
+	label.Font = Enum.Font.GothamMedium
+	label.TextScaled = true
+	label.TextWrapped = true
+	label.Text = text
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 12)
+	c.Parent = label
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 8)
+	pad.PaddingRight = UDim.new(0, 8)
+	pad.Parent = label
+	label.Parent = bb
+	bb.Parent = head
+	task.delay(3.5, function()
+		if bb.Parent then
+			bb:Destroy()
+		end
+	end)
+end
+
+---------------------------------------------------------------- townsfolk
+local HAIR = {
+	Color3.fromRGB(30, 22, 18), Color3.fromRGB(90, 60, 35), Color3.fromRGB(200, 170, 110),
+	Color3.fromRGB(140, 60, 30), Color3.fromRGB(170, 170, 170),
+}
+
+function Models.DressTownsfolk(model: Model)
+	local head = model:FindFirstChild("Head") :: BasePart
+	if not head then
+		return
+	end
+	local hs = head.Size
+	local hair = HAIR[rng:NextInteger(1, #HAIR)]
+	-- Hair cap and back.
+	local cap = cosmetic({ Name = "Hair", Size = Vector3.new(hs.X * 1.08, hs.Y * 0.35, hs.Z * 1.08), Color = hair, Material = Enum.Material.SmoothPlastic, Parent = model })
+	weldAt(head, cap, CFrame.new(0, hs.Y * 0.38, 0.03))
+	local back = cosmetic({ Name = "HairBack", Size = Vector3.new(hs.X * 1.08, hs.Y * (rng:NextNumber() < 0.5 and 0.8 or 1.3), hs.Z * 0.3), Color = hair, Material = Enum.Material.SmoothPlastic, Parent = model })
+	weldAt(head, back, CFrame.new(0, hs.Y * 0.05 - (back.Size.Y - hs.Y * 0.8) / 2, hs.Z * 0.42))
+
+	local roll = rng:NextNumber()
+	if roll < 0.3 then
+		-- Fedora
+		local brim = cosmetic({ ClassName = "Part", Name = "HatBrim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.12, hs.X * 1.7, hs.X * 1.7), Color = Color3.fromRGB(40, 35, 30), Parent = model })
+		weldAt(head, brim, CFrame.new(0, hs.Y * 0.55, 0) * CFrame.Angles(0, 0, math.rad(90)))
+		local top = cosmetic({ ClassName = "Part", Name = "HatTop", Shape = Enum.PartType.Cylinder, Size = Vector3.new(hs.Y * 0.55, hs.X * 1.05, hs.X * 1.05), Color = Color3.fromRGB(45, 40, 35), Parent = model })
+		weldAt(head, top, CFrame.new(0, hs.Y * 0.8, 0) * CFrame.Angles(0, 0, math.rad(90)))
+		local band = cosmetic({ ClassName = "Part", Name = "HatBand", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.14, hs.X * 1.07, hs.X * 1.07), Color = Color3.fromRGB(120, 20, 30), Parent = model })
+		weldAt(head, band, CFrame.new(0, hs.Y * 0.62, 0) * CFrame.Angles(0, 0, math.rad(90)))
+	elseif roll < 0.5 then
+		-- Glasses
+		for _, x in { -0.22, 0.22 } do
+			local lens = cosmetic({ Name = "Lens", Size = Vector3.new(hs.X * 0.28, hs.Y * 0.18, 0.05), Color = Color3.fromRGB(20, 20, 20), Transparency = 0.3, Parent = model })
+			weldAt(head, lens, CFrame.new(hs.X * x, hs.Y * 0.08, -hs.Z * 0.52))
+		end
+	end
+
+	-- Scarf for some.
+	local torso = model:FindFirstChild("UpperTorso") :: BasePart
+	if torso and rng:NextNumber() < 0.4 then
+		local ts = torso.Size
+		local scarf = cosmetic({ Name = "Scarf", Size = Vector3.new(ts.X * 0.75, 0.35, ts.Z * 1.15), Color = Color3.fromHSV(rng:NextNumber(), 0.6, 0.6), Material = Enum.Material.Fabric, Parent = model })
+		weldAt(torso, scarf, CFrame.new(0, ts.Y * 0.45, 0))
+	end
+end
+
+---------------------------------------------------------------- vampires
+function Models.DressVampire(char: Model)
+	local head = char:FindFirstChild("Head") :: BasePart
+	local torso = char:FindFirstChild("UpperTorso") :: BasePart
+	if not head or not torso then
+		return
+	end
+	-- Pale skin.
+	for _, p in char:GetChildren() do
+		if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+			p.Color = p.Color:Lerp(Color3.fromRGB(235, 230, 235), 0.3)
+		end
+	end
+	local hs = head.Size
+	-- Glowing red eyes and fangs: hidden until hunting (the client shows them).
+	for _, x in { -0.2, 0.2 } do
+		local eye = cosmetic({ Name = "VampEye", Size = Vector3.new(hs.X * 0.16, hs.Y * 0.08, 0.05), Color = Color3.fromRGB(255, 20, 40), Material = Enum.Material.Neon, Transparency = 1, Parent = char })
+		weldAt(head, eye, CFrame.new(hs.X * x, hs.Y * 0.1, -hs.Z * 0.51))
+	end
+	for _, x in { -0.1, 0.1 } do
+		local fang = cosmetic({ ClassName = "WedgePart", Name = "VampFang", Size = Vector3.new(0.08, hs.Y * 0.12, 0.05), Color = Color3.new(1, 1, 1), Transparency = 1, Parent = char })
+		weldAt(head, fang, CFrame.new(hs.X * x, -hs.Y * 0.2, -hs.Z * 0.51) * CFrame.Angles(math.rad(180), 0, 0))
+	end
+	-- Cape: hangs from the shoulders, the client makes it flow.
+	local ts = torso.Size
+	local cape = cosmetic({ Name = "VampCape", Size = Vector3.new(ts.X * 1.15, ts.Y * 2.6, 0.12), Color = Color3.fromRGB(25, 5, 10), Material = Enum.Material.Fabric, Parent = char })
+	local w = Instance.new("Weld")
+	w.Name = "CapeWeld"
+	w.Part0 = torso
+	w.Part1 = cape
+	w.C0 = CFrame.new(0, ts.Y * 0.48, ts.Z * 0.55)
+	w.C1 = CFrame.new(0, cape.Size.Y / 2, 0)
+	w.Parent = cape
+	local lining = cosmetic({ Name = "CapeLining", Size = Vector3.new(cape.Size.X * 0.96, cape.Size.Y * 0.98, 0.05), Color = Color3.fromRGB(130, 0, 20), Material = Enum.Material.Fabric, Parent = char })
+	lining.CFrame = cape.CFrame * CFrame.new(0, 0, -0.08)
+	glue(cape, lining)
+	local collar = cosmetic({ ClassName = "WedgePart", Name = "CapeCollar", Size = Vector3.new(ts.X * 1.2, ts.Y * 0.45, 0.35), Color = Color3.fromRGB(25, 5, 10), Material = Enum.Material.Fabric, Parent = char })
+	weldAt(torso, collar, CFrame.new(0, ts.Y * 0.68, ts.Z * 0.45) * CFrame.Angles(0, math.rad(180), 0))
+end
+
+---------------------------------------------------------------- werewolves
+local FUR = Color3.fromRGB(62, 52, 46)
+local BELLY = Color3.fromRGB(110, 95, 80)
+
+function Models.BuildWolf(char: Model)
+	local root = char:FindFirstChild("HumanoidRootPart") :: BasePart
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if not root or not hum or char:FindFirstChild("WolfBody") then
+		return
+	end
+	-- Hide the human body (remember how it looked).
+	for _, d in char:GetDescendants() do
+		if (d:IsA("BasePart") and d ~= root) or d:IsA("Decal") then
+			d:SetAttribute("OrigTransparency", d.Transparency)
+			d.Transparency = 1
+		end
+	end
+
+	local wolf = Instance.new("Model")
+	wolf.Name = "WolfBody"
+	wolf.Parent = char
+	local g = -(hum.HipHeight + root.Size.Y / 2) -- ground level relative to the root
+
+	local function piece(name, size, color, class)
+		return cosmetic({ ClassName = class, Name = name, Size = size, Color = color, Material = Enum.Material.Fabric, Parent = wolf })
+	end
+	local function jointed(name, size, color, pivot: CFrame, centerFromPivot: Vector3)
+		local p = piece(name, size, color)
+		local w = Instance.new("Weld")
+		w.Name = name .. "Joint"
+		w.Part0 = root
+		w.Part1 = p
+		w.C0 = pivot
+		w.C1 = CFrame.new(-centerFromPivot)
+		w.Parent = p
+		p.CFrame = root.CFrame * pivot * CFrame.new(centerFromPivot)
+		return p
+	end
+
+	local body = jointed("Body", Vector3.new(2.8, 2.6, 5.8), FUR, CFrame.new(0, g + 3.6, 0.4), Vector3.zero)
+	local chest = piece("Chest", Vector3.new(3.1, 3.0, 2.3), FUR)
+	chest.CFrame = body.CFrame * CFrame.new(0, 0.3, -2.3)
+	glue(body, chest)
+	local belly = piece("Belly", Vector3.new(2.2, 0.4, 4.2), BELLY)
+	belly.CFrame = body.CFrame * CFrame.new(0, -1.3, 0)
+	glue(body, belly)
+	-- Hunched shoulders / mane
+	local mane = piece("Mane", Vector3.new(2.6, 1.2, 2.6), Color3.fromRGB(45, 38, 34))
+	mane.CFrame = body.CFrame * CFrame.new(0, 1.5, -1.8) * CFrame.Angles(math.rad(-15), 0, 0)
+	glue(body, mane)
+
+	local head = jointed("Head", Vector3.new(2.2, 2.0, 2.3), FUR, CFrame.new(0, g + 4.7, -2.6), Vector3.new(0, 0.4, -1.1))
+	local snout = piece("Snout", Vector3.new(1.3, 1.0, 1.8), BELLY)
+	snout.CFrame = head.CFrame * CFrame.new(0, -0.35, -1.85)
+	glue(head, snout)
+	local jaw = piece("Jaw", Vector3.new(1.1, 0.35, 1.5), Color3.fromRGB(80, 30, 30))
+	jaw.CFrame = head.CFrame * CFrame.new(0, -0.95, -1.7)
+	glue(head, jaw)
+	local nose = piece("Nose", Vector3.new(0.55, 0.4, 0.3), Color3.fromRGB(15, 12, 12))
+	nose.CFrame = snout.CFrame * CFrame.new(0, 0.3, -0.95)
+	glue(head, nose)
+	for _, x in { -0.65, 0.65 } do
+		local ear = piece("Ear", Vector3.new(0.5, 1.1, 0.7), FUR, "WedgePart")
+		ear.CFrame = head.CFrame * CFrame.new(x, 1.5, 0.3)
+		glue(head, ear)
+		local eye = piece("Eye", Vector3.new(0.38, 0.22, 0.1), Color3.fromRGB(255, 200, 40))
+		eye.Material = Enum.Material.Neon
+		eye.CFrame = head.CFrame * CFrame.new(x * 0.75, 0.35, -1.16)
+		glue(head, eye)
+		for _, side in { -0.25, 0.25 } do
+			local tooth = piece("Tooth", Vector3.new(0.12, 0.3, 0.12), Color3.new(1, 1, 1), "WedgePart")
+			tooth.CFrame = head.CFrame * CFrame.new(x * 0.6 + side * 0.4, -0.95, -2.5) * CFrame.Angles(math.rad(180), 0, 0)
+			glue(head, tooth)
+		end
+	end
+
+	jointed("Tail", Vector3.new(0.7, 0.7, 3.0), FUR, CFrame.new(0, g + 4.3, 3.2) * CFrame.Angles(math.rad(-35), 0, 0), Vector3.new(0, 0, 1.5))
+
+	for _, leg in {
+		{ "LegFL", -0.95, -1.8 },
+		{ "LegFR", 0.95, -1.8 },
+		{ "LegBL", -0.95, 2.5 },
+		{ "LegBR", 0.95, 2.5 },
+	} do
+		local l = jointed(leg[1], Vector3.new(0.95, 2.7, 1.0), FUR, CFrame.new(leg[2], g + 2.7, leg[3]), Vector3.new(0, -1.35, 0))
+		local paw = piece("Paw", Vector3.new(1.05, 0.45, 1.3), Color3.fromRGB(35, 30, 28))
+		paw.CFrame = l.CFrame * CFrame.new(0, -1.2, -0.15)
+		glue(l, paw)
+	end
+end
+
+function Models.RemoveWolf(char: Model)
+	local wolf = char:FindFirstChild("WolfBody")
+	if wolf then
+		wolf:Destroy()
+	end
+	for _, d in char:GetDescendants() do
+		local t = d:GetAttribute("OrigTransparency")
+		if t ~= nil then
+			d.Transparency = t
+			d:SetAttribute("OrigTransparency", nil)
+		end
+	end
+end
+
+return Models
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">NPCs</string><ProtectedString name="Source"><![CDATA[-- Townsfolk who wander the square, chat, wave at people, and run from vampires at night.
+-- Vampires feed on them; some secretly carry vervain.
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Models = require(script.Parent:WaitForChild("Models"))
 
 local NPCs = {}
 
@@ -1104,6 +1871,7 @@ NPCs.Folder.Parent = workspace
 local COUNT = 12
 local RESPAWN_SECONDS = 15
 local VERVAIN_CHANCE = 0.25
+local FLEE_RANGE = 24
 
 local NAMES = {
 	"Mrs. Hollis", "Pastor Wren", "Coach Barrow", "Nora the Barista", "Old Man Fitch",
@@ -1120,15 +1888,71 @@ local SHIRTS = {
 }
 local PANTS = { Color3.fromRGB(35, 40, 60), Color3.fromRGB(60, 50, 40), Color3.fromRGB(25, 25, 25) }
 
+local LINES_DAY = {
+	"อากาศดีนะวันนี้ ☀️",
+	"เบอร์เกอร์ร้าน Grill อร่อยสุดในเมือง",
+	"ได้ข่าวว่ามีสัตว์ป่ากัดคนในป่าอีกแล้ว...",
+	"ทำไมคนเมืองนี้ชอบใส่แหวนกันจัง?",
+	"หอนาฬิกาเดินเร็วไปห้านาทีมาสิบปีแล้ว",
+	"อย่าเข้าป่าตอนกลางคืนนะ เตือนแล้ว",
+	"บ้าน Ravencroft มีคนย้ายมาใหม่อีกแล้วเหรอ",
+	"เมื่อคืนฝันว่ามีคนบอกให้ลืม... ลืมอะไรนะ",
+}
+local LINES_VERVAIN = {
+	"ชาเวอร์เวนแก้วนี้หอมดีจริง 🌿",
+	"ยายบอกให้ใส่เวอร์เวนในกาแฟทุกเช้า",
+}
+local LINES_NIGHT = {
+	"หมอกลงหนาจัง กลับบ้านดีกว่า",
+	"ได้ยินเสียงหอนไหม...?",
+	"รู้สึกเหมือนมีคนจ้องอยู่เลย",
+	"คืนนี้ค้างคาวเยอะผิดปกตินะ 🦇",
+}
+local LINES_FLEE = { "ช่วยด้วย!!", "อย่าเข้ามานะ!", "ตาแดงๆ นั่นอะไรน่ะ!", "มะ-มะ-แวมไพร์!!" }
+local LINES_GREET = { "สวัสดีจ้ะ 👋", "หวัดดี! มาเที่ยวเหรอ", "ยินดีต้อนรับสู่ Moonlit Falls" }
+
 local rng = Random.new()
 local wanderPoints: { Vector3 } = {}
+local animRemote: RemoteEvent? = nil
 
 local function pick(list)
 	return list[rng:NextInteger(1, #list)]
 end
 
+local function isNight()
+	return ReplicatedStorage:GetAttribute("IsDay") == false
+end
+
 local function isStunned(model: Model)
 	return (model:GetAttribute("StunnedUntil") or 0) > workspace:GetServerTimeNow()
+end
+
+local function playAnim(model: Model, name: string)
+	if animRemote then
+		animRemote:FireAllClients(model, name)
+	end
+end
+
+function NPCs.Say(model: Model, text: string, color: Color3?)
+	Models.Say(model, text, color)
+end
+
+-- Nearest player within range, and whether that player is a vampire.
+local function nearestPlayer(root: BasePart, range: number): (Model?, boolean)
+	local best, bestD, vamp = nil, range, false
+	for _, p in Players:GetPlayers() do
+		local char = p.Character
+		local r = char and char:FindFirstChild("HumanoidRootPart")
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		if r and hum and hum.Health > 0 then
+			local d = (r.Position - root.Position).Magnitude
+			if d < bestD then
+				best, bestD = char, d
+				vamp = p:GetAttribute("Side") == "Vampire" or char:GetAttribute("Transformed") == true
+			end
+		end
+	end
+	return best, vamp
 end
 
 local function makeNPC(): Model?
@@ -1153,7 +1977,8 @@ local function makeNPC(): Model?
 	local name = pick(NAMES)
 	model.Name = name
 	model:SetAttribute("NPC", true)
-	if rng:NextNumber() < VERVAIN_CHANCE then
+	local hasVervain = rng:NextNumber() < VERVAIN_CHANCE
+	if hasVervain then
 		model:SetAttribute("Vervain", 1)
 	end
 
@@ -1164,19 +1989,63 @@ local function makeNPC(): Model?
 
 	model:PivotTo(CFrame.new(pick(wanderPoints) + Vector3.new(0, 4, 0)))
 	model.Parent = NPCs.Folder
+	Models.DressTownsfolk(model)
 
-	local root = model:FindFirstChild("HumanoidRootPart")
+	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart
 	if root then
 		root:SetNetworkOwner(nil)
 	end
 
-	-- Wander around town.
+	-- Brain: wander, chat, greet, flee.
 	task.spawn(function()
+		local nextMove, nextChat, lastGreet = 0, os.clock() + rng:NextNumber(3, 12), 0
 		while model.Parent and hum.Health > 0 do
-			if not isStunned(model) then
-				hum:MoveTo(pick(wanderPoints))
+			task.wait(0.5)
+			if isStunned(model) or not root then
+				continue
 			end
-			task.wait(rng:NextNumber(4, 9))
+			local t = os.clock()
+			local near, threat = nearestPlayer(root, FLEE_RANGE)
+			if near and threat and isNight() then
+				-- Run away from the vampire / werewolf.
+				local away = root.Position - near:GetPivot().Position
+				away = Vector3.new(away.X, 0, away.Z)
+				if away.Magnitude < 0.1 then
+					away = Vector3.new(1, 0, 0)
+				end
+				hum.WalkSpeed = 17
+				hum:MoveTo(root.Position + away.Unit * 30)
+				nextMove = t + 1.5
+				if t > nextChat then
+					NPCs.Say(model, pick(LINES_FLEE), Color3.fromRGB(170, 20, 30))
+					playAnim(model, "Scream")
+					nextChat = t + 4
+				end
+				continue
+			end
+			hum.WalkSpeed = 10
+			if near and t - lastGreet > 25 and (near:GetPivot().Position - root.Position).Magnitude < 10 then
+				lastGreet = t
+				hum:MoveTo(root.Position)
+				root.CFrame = CFrame.lookAt(root.Position, Vector3.new(near:GetPivot().Position.X, root.Position.Y, near:GetPivot().Position.Z))
+				NPCs.Say(model, pick(LINES_GREET))
+				playAnim(model, "Wave")
+				nextMove = t + 3
+				nextChat = t + 8
+				continue
+			end
+			if t > nextChat then
+				local lines = isNight() and LINES_NIGHT or LINES_DAY
+				if hasVervain and rng:NextNumber() < 0.4 then
+					lines = LINES_VERVAIN
+				end
+				NPCs.Say(model, pick(lines))
+				nextChat = t + rng:NextNumber(10, 22)
+			end
+			if t > nextMove then
+				hum:MoveTo(pick(wanderPoints))
+				nextMove = t + rng:NextNumber(4, 9)
+			end
 		end
 	end)
 
@@ -1190,8 +2059,9 @@ local function makeNPC(): Model?
 	return model
 end
 
-function NPCs.Start(points: { Vector3 })
+function NPCs.Start(points: { Vector3 }, remote: RemoteEvent?)
 	wanderPoints = points
+	animRemote = remote
 	for _ = 1, COUNT do
 		makeNPC()
 	end
@@ -1201,7 +2071,817 @@ return NPCs
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX00000014"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000013"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="Folder" referent="RBX00000012"><Properties><string name="Name">Client</string></Properties><Item class="LocalScript" referent="RBX00000011"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[-- Moonlit Falls: HUD, side picker, keyboard + on-screen buttons, vampire dash.
+<Item class="StarterPlayer" referent="RBX00000018"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000017"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="Folder" referent="RBX00000016"><Properties><string name="Name">Client</string></Properties><Item class="LocalScript" referent="RBX00000013"><Properties><string name="Name">Ambience</string><ProtectedString name="Source"><![CDATA[-- Client-only atmosphere: clock hands, glowing windows and lamps at night,
+-- bats, fireflies, cemetery mist, the spinning daylight ring, a hunger/sunburn
+-- vignette, and a slow camera fly-over while the side menu is open.
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
+local CollectionService = game:GetService("CollectionService")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local function isNight()
+	return ReplicatedStorage:GetAttribute("IsDay") == false
+end
+
+---------------------------------------------------------------- windows & lamps
+local windowOrig: { [BasePart]: { Color3 | Enum.Material } } = {}
+local WARM = Color3.fromRGB(255, 200, 120)
+
+local function applyWindow(p: BasePart)
+	if not windowOrig[p] then
+		windowOrig[p] = { p.Color, p.Material }
+	end
+	local orig = windowOrig[p]
+	if isNight() then
+		p.Material = Enum.Material.Neon
+		p.Color = p.Name == "Window" and WARM or orig[1] :: Color3
+	else
+		p.Material = p.Name == "Window" and orig[2] :: Enum.Material or Enum.Material.SmoothPlastic
+		p.Color = orig[1] :: Color3
+	end
+end
+
+local function applyLight(l: Light)
+	l.Enabled = isNight()
+end
+
+local function refreshNight()
+	for _, p in CollectionService:GetTagged("NightWindow") do
+		applyWindow(p)
+	end
+	for _, l in CollectionService:GetTagged("NightLight") do
+		applyLight(l)
+	end
+end
+CollectionService:GetInstanceAddedSignal("NightWindow"):Connect(applyWindow)
+CollectionService:GetInstanceAddedSignal("NightLight"):Connect(applyLight)
+ReplicatedStorage:GetAttributeChangedSignal("IsDay"):Connect(refreshNight)
+task.defer(refreshNight)
+
+---------------------------------------------------------------- effects folder
+local fx = Instance.new("Folder")
+fx.Name = "ClientAmbience"
+fx.Parent = workspace
+
+local function ghostPart(props): BasePart
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	for k, v in props do
+		p[k] = v
+	end
+	p.Parent = fx
+	return p
+end
+
+local mapFolder = workspace:WaitForChild("MoonlitFalls", 30)
+local markers = mapFolder and mapFolder:WaitForChild("AmbienceMarkers", 10)
+
+local function markerPositions(name: string, fallback: Vector3): { Vector3 }
+	local list = {}
+	if markers then
+		for _, m in markers:GetChildren() do
+			if m.Name == name and m:IsA("BasePart") then
+				table.insert(list, m.Position)
+			end
+		end
+	end
+	if #list == 0 then
+		table.insert(list, fallback)
+	end
+	return list
+end
+
+---------------------------------------------------------------- fireflies & mist
+local nightEmitters: { ParticleEmitter } = {}
+
+for _, pos in markerPositions("Forest", Vector3.new(160, 0, -120)) do
+	local box = ghostPart({ Size = Vector3.new(90, 12, 90), Position = pos + Vector3.new(0, 6, 0), Transparency = 1 })
+	local pe = Instance.new("ParticleEmitter")
+	pe.Shape = Enum.ParticleEmitterShape.Box
+	pe.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	pe.Color = ColorSequence.new(Color3.fromRGB(220, 255, 120))
+	pe.LightEmission = 1
+	pe.LightInfluence = 0
+	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.2, 0.25), NumberSequenceKeypoint.new(0.8, 0.25), NumberSequenceKeypoint.new(1, 0) })
+	pe.Lifetime = NumberRange.new(4, 7)
+	pe.Speed = NumberRange.new(0.3, 1)
+	pe.SpreadAngle = Vector2.new(180, 180)
+	pe.RotSpeed = NumberRange.new(-30, 30)
+	pe.Rate = 18
+	pe.Parent = box
+	table.insert(nightEmitters, pe)
+end
+
+local mist: ParticleEmitter
+do
+	local pos = markerPositions("Cemetery", Vector3.new(-150, 0, 0))[1]
+	local box = ghostPart({ Size = Vector3.new(70, 1, 60), Position = pos + Vector3.new(0, 1, 0), Transparency = 1 })
+	mist = Instance.new("ParticleEmitter")
+	mist.Shape = Enum.ParticleEmitterShape.Box
+	mist.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	mist.Color = ColorSequence.new(Color3.fromRGB(200, 205, 220))
+	mist.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, 0.82), NumberSequenceKeypoint.new(0.7, 0.85), NumberSequenceKeypoint.new(1, 1) })
+	mist.Size = NumberSequence.new(10, 16)
+	mist.Lifetime = NumberRange.new(8, 12)
+	mist.Speed = NumberRange.new(0.5, 1.5)
+	mist.SpreadAngle = Vector2.new(180, 10)
+	mist.Rate = 6
+	mist.LightInfluence = 0.6
+	mist.Parent = box
+end
+
+---------------------------------------------------------------- bats
+type Bat = { body: BasePart, left: BasePart, right: BasePart, center: Vector3, radius: number, speed: number, height: number, phase: number }
+local bats: { Bat } = {}
+local rng = Random.new()
+local roosts = { markerPositions("BatRoost", Vector3.new(0, 48, -22))[1], markerPositions("Cemetery", Vector3.new(-150, 0, 0))[1] + Vector3.new(0, 18, 0) }
+local BAT_COLOR = Color3.fromRGB(18, 14, 18)
+
+for i = 1, 18 do
+	local s = rng:NextNumber(0.8, 1.2)
+	local body = ghostPart({ Name = "Bat", Shape = Enum.PartType.Ball, Size = Vector3.new(0.7, 0.7, 0.9) * s, Color = BAT_COLOR, Material = Enum.Material.SmoothPlastic })
+	local left = ghostPart({ Name = "BatWing", Size = Vector3.new(1.6, 0.06, 0.8) * s, Color = BAT_COLOR, Material = Enum.Material.SmoothPlastic })
+	local right = ghostPart({ Name = "BatWing", Size = Vector3.new(1.6, 0.06, 0.8) * s, Color = BAT_COLOR, Material = Enum.Material.SmoothPlastic })
+	table.insert(bats, {
+		body = body,
+		left = left,
+		right = right,
+		center = roosts[(i % 2) + 1],
+		radius = rng:NextNumber(10, 28),
+		speed = rng:NextNumber(0.5, 1.1) * (rng:NextNumber() < 0.5 and -1 or 1),
+		height = rng:NextNumber(-6, 10),
+		phase = rng:NextNumber(0, math.pi * 2),
+	})
+end
+
+---------------------------------------------------------------- vignette
+local gui = Instance.new("ScreenGui")
+gui.Name = "MoonlitVignette"
+gui.IgnoreGuiInset = true
+gui.ResetOnSpawn = false
+gui.DisplayOrder = -2
+gui.Parent = player:WaitForChild("PlayerGui")
+local vignette = Instance.new("Frame")
+vignette.Size = UDim2.fromScale(1, 1)
+vignette.BorderSizePixel = 0
+vignette.BackgroundTransparency = 1
+vignette.Parent = gui
+local grad = Instance.new("UIGradient")
+-- Transparent in the middle, solid at the edges (radial-ish via two passes).
+grad.Transparency = NumberSequence.new({
+	NumberSequenceKeypoint.new(0, 0),
+	NumberSequenceKeypoint.new(0.25, 0.85),
+	NumberSequenceKeypoint.new(0.75, 0.85),
+	NumberSequenceKeypoint.new(1, 0),
+})
+grad.Parent = vignette
+
+---------------------------------------------------------------- intro fly-over
+local wasMenuOpen = false
+local function menuOpen(): boolean
+	local hud = player.PlayerGui:FindFirstChild("MoonlitHUD")
+	local menu = hud and hud:FindFirstChild("SideMenu")
+	return menu ~= nil and menu.Visible
+end
+
+---------------------------------------------------------------- per frame
+local clockHands: Model? = nil
+local ring: BasePart? = nil
+local lastLookup = 0
+
+RunService.RenderStepped:Connect(function(dt)
+	local t = os.clock()
+	local night = isNight()
+
+	-- Find streamed-in map pieces now and then.
+	if t - lastLookup > 2 and mapFolder then
+		lastLookup = t
+		clockHands = clockHands and clockHands.Parent and clockHands or mapFolder:FindFirstChild("ClockHands") :: Model?
+		ring = ring and ring.Parent and ring or mapFolder:FindFirstChild("DaylightRing", true) :: BasePart?
+	end
+
+	-- Clock hands follow the in-game time.
+	if clockHands then
+		local center = clockHands:GetAttribute("Center") :: Vector3?
+		local hour = clockHands:FindFirstChild("HourHand") :: BasePart?
+		local minute = clockHands:FindFirstChild("MinuteHand") :: BasePart?
+		if center and hour and minute then
+			local ct = Lighting.ClockTime
+			local ha = (ct % 12) / 12 * math.pi * 2
+			local ma = (ct % 1) * math.pi * 2
+			hour.CFrame = CFrame.new(center) * CFrame.Angles(0, 0, -ha) * CFrame.new(0, hour.Size.Y / 2 - 0.2, 0)
+			minute.CFrame = CFrame.new(center + Vector3.new(0, 0, 0.05)) * CFrame.Angles(0, 0, -ma) * CFrame.new(0, minute.Size.Y / 2 - 0.2, 0)
+		end
+	end
+
+	if ring then
+		ring.CFrame = CFrame.new(ring.Position) * CFrame.Angles(0, t * 1.5, 0) * CFrame.Angles(0, 0, math.sin(t) * 0.3)
+	end
+
+	for _, pe in nightEmitters do
+		pe.Enabled = night
+	end
+	mist.Rate = night and 9 or 3
+
+	-- Bats circle the clock tower and the cemetery at night.
+	for _, b in bats do
+		if night then
+			local a = b.phase + t * b.speed
+			local wobble = math.sin(t * 2.3 + b.phase) * 3
+			local pos = b.center + Vector3.new(math.cos(a) * b.radius, b.height + wobble, math.sin(a) * b.radius)
+			local tangent = Vector3.new(-math.sin(a), 0, math.cos(a)) * math.sign(b.speed)
+			local cf = CFrame.lookAt(pos, pos + tangent)
+			local flap = math.sin(t * 20 + b.phase) * 0.9
+			b.body.CFrame = cf
+			b.left.CFrame = cf * CFrame.Angles(0, 0, flap) * CFrame.new(-b.left.Size.X / 2, 0, 0)
+			b.right.CFrame = cf * CFrame.Angles(0, 0, -flap) * CFrame.new(b.right.Size.X / 2, 0, 0)
+			b.body.Transparency, b.left.Transparency, b.right.Transparency = 0, 0, 0
+		elseif b.body.Transparency == 0 then
+			b.body.Transparency, b.left.Transparency, b.right.Transparency = 1, 1, 1
+		end
+	end
+
+	-- Hunger / sunburn vignette.
+	local char = player.Character
+	local side = player:GetAttribute("Side")
+	local strength, color = 0, Color3.new(0, 0, 0)
+	if char and (char:GetAttribute("BurningUntil") or 0) > workspace:GetServerTimeNow() then
+		strength, color = 0.55 + math.sin(t * 12) * 0.1, Color3.fromRGB(255, 120, 20)
+	elseif side == "Vampire" and (player:GetAttribute("Blood") or 100) < 25 then
+		strength, color = 0.35 + math.sin(t * 5) * 0.12, Color3.fromRGB(140, 0, 10)
+	elseif night then
+		strength, color = 0.25, Color3.fromRGB(5, 0, 15)
+	end
+	vignette.BackgroundColor3 = color
+	vignette.BackgroundTransparency = 1 - strength
+
+	-- Fly-over camera while choosing a side.
+	local open = menuOpen()
+	if open then
+		camera.CameraType = Enum.CameraType.Scriptable
+		local a = t * 0.08
+		local pos = Vector3.new(math.cos(a) * 130, 55, math.sin(a) * 130)
+		camera.CFrame = CFrame.lookAt(pos, Vector3.new(0, 15, 0))
+	elseif wasMenuOpen then
+		camera.CameraType = Enum.CameraType.Custom
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		if hum then
+			camera.CameraSubject = hum
+		end
+	end
+	wasMenuOpen = open
+end)
+]]></ProtectedString></Properties></Item>
+<Item class="LocalScript" referent="RBX00000014"><Properties><string name="Name">Animator</string><ProtectedString name="Source"><![CDATA[-- Plays procedural animations and effects for every character on this client:
+-- ability clips sent by the server, stunned/burning poses, fallback walk for
+-- townsfolk, the flowing vampire cape, glowing eyes, and the four-legged wolf.
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+local Lighting = game:GetService("Lighting")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local Anims = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Anims"))
+local AnimRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Anim")
+
+local JOINTS = {
+	Root = "LowerTorso",
+	Waist = "UpperTorso",
+	Neck = "Head",
+	RightShoulder = "RightUpperArm",
+	LeftShoulder = "LeftUpperArm",
+	RightElbow = "RightLowerArm",
+	LeftElbow = "LeftLowerArm",
+	RightHip = "RightUpperLeg",
+	LeftHip = "LeftUpperLeg",
+	RightKnee = "RightLowerLeg",
+	LeftKnee = "LeftLowerLeg",
+}
+-- Clips that only move the wolf body (no humanoid pose).
+local WOLF_CLIPS = { Howl = 1.8, Claw = 0.5, Dash = 0.45 }
+local SLASH_SOUND = "rbxasset://sounds/swordslash.wav"
+
+type Rig = {
+	joints: { [string]: { motor: Motor6D, base: CFrame } },
+	active: boolean,
+	clipName: string?,
+	clipStart: number,
+	clipLen: number,
+	capeBase: CFrame?,
+	wolfBases: { [Weld]: CFrame },
+	wolfPhase: number,
+}
+local rigs: { [Model]: Rig } = setmetatable({}, { __mode = "k" }) :: any
+
+local function getRig(model: Model): Rig
+	local rig = rigs[model]
+	if not rig then
+		rig = { joints = {}, active = false, clipName = nil, clipStart = 0, clipLen = 0, capeBase = nil, wolfBases = {}, wolfPhase = 0 }
+		rigs[model] = rig
+	end
+	return rig
+end
+
+local function captureJoints(model: Model, rig: Rig)
+	table.clear(rig.joints)
+	for name, partName in JOINTS do
+		local p = model:FindFirstChild(partName)
+		local m = p and p:FindFirstChild(name)
+		if m and m:IsA("Motor6D") then
+			rig.joints[name] = { motor = m, base = m.C0 }
+		end
+	end
+end
+
+local function restore(rig: Rig)
+	for _, j in rig.joints do
+		if j.motor.Parent then
+			j.motor.C0 = j.base
+		end
+	end
+	rig.active = false
+end
+
+---------------------------------------------------------------- screen fx
+local fxGui = Instance.new("ScreenGui")
+fxGui.Name = "MoonlitFx"
+fxGui.IgnoreGuiInset = true
+fxGui.ResetOnSpawn = false
+fxGui.DisplayOrder = -1
+fxGui.Parent = player:WaitForChild("PlayerGui")
+local flash = Instance.new("Frame")
+flash.Size = UDim2.fromScale(1, 1)
+flash.BackgroundTransparency = 1
+flash.BorderSizePixel = 0
+flash.Parent = fxGui
+
+local function screenFlash(color: Color3, strength: number, duration: number)
+	flash.BackgroundColor3 = color
+	flash.BackgroundTransparency = 1 - strength
+	TweenService:Create(flash, TweenInfo.new(duration), { BackgroundTransparency = 1 }):Play()
+end
+
+local shakeUntil, shakeMag = 0, 0
+local function shake(mag: number, duration: number)
+	shakeMag = math.max(mag, os.clock() < shakeUntil and shakeMag or 0)
+	shakeUntil = math.max(shakeUntil, os.clock() + duration)
+end
+RunService:BindToRenderStep("MoonlitShake", Enum.RenderPriority.Camera.Value + 1, function()
+	local left = shakeUntil - os.clock()
+	if left > 0 then
+		local m = shakeMag * math.min(1, left * 3)
+		camera.CFrame *= CFrame.Angles(math.rad((math.random() - 0.5) * m), math.rad((math.random() - 0.5) * m), 0)
+	end
+end)
+
+local function sound(id: string, parent: Instance, volume: number?, pitch: number?)
+	local s = Instance.new("Sound")
+	s.SoundId = id
+	s.Volume = volume or 0.6
+	s.PlaybackSpeed = pitch or 1
+	s.RollOffMaxDistance = 80
+	s.Parent = parent
+	s:Play()
+	Debris:AddItem(s, 3)
+end
+
+local function fxPart(props): BasePart
+	local p = Instance.new(props.ClassName or "Part")
+	props.ClassName = nil
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	for k, v in props do
+		p[k] = v
+	end
+	p.Parent = workspace
+	return p
+end
+
+local function particles(at: BasePart | Attachment, color: Color3, count: number, speed: number?, size: number?)
+	local pe = Instance.new("ParticleEmitter")
+	pe.Color = ColorSequence.new(color)
+	pe.Size = NumberSequence.new(size or 0.4, 0)
+	pe.Speed = NumberRange.new((speed or 10) * 0.6, speed or 10)
+	pe.Lifetime = NumberRange.new(0.4, 0.9)
+	pe.SpreadAngle = Vector2.new(180, 180)
+	pe.Acceleration = Vector3.new(0, -20, 0)
+	pe.Rate = 0
+	pe.LightEmission = 0.4
+	pe.Parent = at
+	pe:Emit(count)
+	Debris:AddItem(pe, 1.5)
+end
+
+local function isLocal(model: Model?)
+	return model ~= nil and model == player.Character
+end
+
+local function nearLocal(model: Model, dist: number)
+	local char = player.Character
+	return char and (char:GetPivot().Position - model:GetPivot().Position).Magnitude < dist
+end
+
+---------------------------------------------------------------- per-clip effects
+local Effects = {}
+
+function Effects.Bite(model: Model, target: Model?)
+	if not target then
+		return
+	end
+	task.delay(0.15, function()
+		local head = target:FindFirstChild("Head")
+		if head then
+			particles(head, Color3.fromRGB(150, 0, 15), 30, 8, 0.35)
+		end
+	end)
+	if isLocal(model) then
+		shake(2, 0.4)
+	end
+end
+
+function Effects.Bitten(model: Model)
+	if isLocal(model) then
+		screenFlash(Color3.fromRGB(160, 0, 0), 0.55, 1.2)
+		shake(4, 0.6)
+	end
+end
+
+function Effects.Compel(model: Model, target: Model?)
+	local head = model:FindFirstChild("Head")
+	local tHead = target and target:FindFirstChild("Head")
+	if not head or not tHead then
+		return
+	end
+	local a0 = Instance.new("Attachment")
+	a0.Position = Vector3.new(0, 0.1, -0.6)
+	a0.Parent = head
+	local a1 = Instance.new("Attachment")
+	a1.Parent = tHead
+	local beam = Instance.new("Beam")
+	beam.Attachment0 = a0
+	beam.Attachment1 = a1
+	beam.Color = ColorSequence.new(Color3.fromRGB(200, 40, 70), Color3.fromRGB(230, 200, 255))
+	beam.Transparency = NumberSequence.new(0.2, 0.6)
+	beam.Width0 = 0.15
+	beam.Width1 = 0.6
+	beam.LightEmission = 1
+	beam.CurveSize0 = 1
+	beam.CurveSize1 = -1
+	beam.Segments = 20
+	beam.FaceCamera = true
+	beam.Parent = head
+	for _, x in { a0, a1, beam } do
+		Debris:AddItem(x, 1.3)
+	end
+	particles(tHead, Color3.fromRGB(230, 200, 255), 20, 3, 0.3)
+	if isLocal(target) then
+		local blur = Instance.new("BlurEffect")
+		blur.Size = 14
+		blur.Parent = Lighting
+		TweenService:Create(blur, TweenInfo.new(4), { Size = 0 }):Play()
+		Debris:AddItem(blur, 4.1)
+		screenFlash(Color3.fromRGB(220, 200, 255), 0.5, 2)
+	end
+end
+
+local function handProp(model: Model, props, offset: CFrame, life: number)
+	local hand = model:FindFirstChild("RightHand")
+	if not hand then
+		return nil
+	end
+	local p = fxPart(props)
+	p.Anchored = false
+	p.Massless = true
+	p.CFrame = hand.CFrame * offset
+	local w = Instance.new("Weld")
+	w.Part0 = hand
+	w.Part1 = p
+	w.C0 = offset
+	w.Parent = p
+	Debris:AddItem(p, life)
+	return p
+end
+
+function Effects.Stake(model: Model, target: Model?)
+	local stake = handProp(model, { Name = "Stake", Size = Vector3.new(0.35, 2.6, 0.35), Color = Color3.fromRGB(120, 85, 50), Material = Enum.Material.Wood }, CFrame.new(0, -1.1, 0), 0.8)
+	if stake then
+		local tip = fxPart({ ClassName = "WedgePart", Name = "StakeTip", Size = Vector3.new(0.35, 0.6, 0.35), Color = Color3.fromRGB(150, 110, 70), Material = Enum.Material.Wood })
+		tip.Anchored = false
+		tip.Massless = true
+		tip.CFrame = stake.CFrame * CFrame.new(0, -1.6, 0) * CFrame.Angles(math.pi, 0, 0)
+		local wc = Instance.new("WeldConstraint")
+		wc.Part0 = stake
+		wc.Part1 = tip
+		wc.Parent = tip
+		Debris:AddItem(tip, 0.8)
+	end
+	task.delay(0.35, function()
+		local root = model:FindFirstChild("HumanoidRootPart")
+		if root then
+			sound(SLASH_SOUND, root, 0.6, 0.8)
+		end
+		local torso = target and target:FindFirstChild("UpperTorso")
+		if torso then
+			particles(torso, Color3.fromRGB(120, 0, 10), 25, 9)
+		end
+	end)
+end
+
+function Effects.Throw(model: Model, target: Model?)
+	task.delay(0.3, function()
+		local hand = model:FindFirstChild("RightHand")
+		if not hand then
+			return
+		end
+		local tRoot = target and target:FindFirstChild("HumanoidRootPart")
+		local goal = tRoot and tRoot.Position or (hand.Position + model:GetPivot().LookVector * 14)
+		local orb = fxPart({ Name = "VervainOrb", Shape = Enum.PartType.Ball, Size = Vector3.new(0.8, 0.8, 0.8), Color = Color3.fromRGB(160, 90, 230), Material = Enum.Material.Neon, Position = hand.Position })
+		local trail = Instance.new("Sparkles")
+		trail.SparkleColor = Color3.fromRGB(180, 120, 255)
+		trail.Parent = orb
+		local tween = TweenService:Create(orb, TweenInfo.new(0.25, Enum.EasingStyle.Linear), { Position = goal })
+		tween:Play()
+		tween.Completed:Connect(function()
+			particles(orb, Color3.fromRGB(170, 100, 240), 40, 14, 0.5)
+			orb.Transparency = 1
+			trail:Destroy()
+			sound(SLASH_SOUND, orb, 0.4, 1.6)
+			Debris:AddItem(orb, 1.6)
+		end)
+	end)
+end
+
+function Effects.Claw(model: Model, target: Model?)
+	local torso = target and (target:FindFirstChild("UpperTorso") or target:FindFirstChild("HumanoidRootPart"))
+	if not torso then
+		return
+	end
+	task.delay(0.15, function()
+		local root = model:FindFirstChild("HumanoidRootPart")
+		if root then
+			sound(SLASH_SOUND, root, 0.7, 0.7)
+		end
+		for i = -1, 1 do
+			local s = fxPart({ Name = "Slash", Size = Vector3.new(0.12, 3.2, 0.12), Color = Color3.fromRGB(255, 40, 40), Material = Enum.Material.Neon, CFrame = torso.CFrame * CFrame.new(i * 0.45, 0, -0.8) * CFrame.Angles(0, 0, math.rad(30)) })
+			TweenService:Create(s, TweenInfo.new(0.45), { Transparency = 1, Size = Vector3.new(0.05, 3.8, 0.05) }):Play()
+			Debris:AddItem(s, 0.5)
+		end
+		particles(torso, Color3.fromRGB(150, 0, 15), 15, 8)
+	end)
+end
+
+function Effects.Dash(model: Model)
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	local a0 = Instance.new("Attachment")
+	a0.Position = Vector3.new(0, 1.2, 0)
+	a0.Parent = root
+	local a1 = Instance.new("Attachment")
+	a1.Position = Vector3.new(0, -1.6, 0)
+	a1.Parent = root
+	local trail = Instance.new("Trail")
+	trail.Attachment0 = a0
+	trail.Attachment1 = a1
+	trail.Lifetime = 0.3
+	trail.Color = ColorSequence.new(Color3.fromRGB(120, 0, 20), Color3.fromRGB(20, 0, 5))
+	trail.Transparency = NumberSequence.new(0.2, 1)
+	trail.LightEmission = 0.3
+	trail.Parent = root
+	for _, x in { a0, a1, trail } do
+		Debris:AddItem(x, 0.7)
+	end
+	particles(root, Color3.fromRGB(60, 50, 55), 15, 6, 1)
+end
+
+function Effects.Transform(model: Model)
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if root then
+		particles(root, Color3.fromRGB(255, 210, 90), 40, 6, 0.6)
+	end
+	if isLocal(model) then
+		screenFlash(Color3.fromRGB(255, 220, 120), 0.5, 1.8)
+		shake(3, 1.5)
+	end
+end
+
+function Effects.Howl(model: Model)
+	local head = model:FindFirstChild("Head", true)
+	local wolf = model:FindFirstChild("WolfBody")
+	local h = wolf and wolf:FindFirstChild("Head") or head
+	if h then
+		local bb = Instance.new("BillboardGui")
+		bb.Size = UDim2.fromOffset(220, 60)
+		bb.StudsOffset = Vector3.new(0, 3, 0)
+		bb.MaxDistance = 120
+		local t = Instance.new("TextLabel")
+		t.Size = UDim2.fromScale(1, 1)
+		t.BackgroundTransparency = 1
+		t.Text = "AWOOOOOO!! 🌕"
+		t.Font = Enum.Font.Fantasy
+		t.TextScaled = true
+		t.TextColor3 = Color3.fromRGB(255, 220, 120)
+		t.TextStrokeTransparency = 0.3
+		t.Parent = bb
+		bb.Parent = h
+		Debris:AddItem(bb, 2)
+	end
+	if nearLocal(model, 70) then
+		shake(1.5, 1.2)
+	end
+end
+
+function Effects.Hit(model: Model)
+	if isLocal(model) then
+		screenFlash(Color3.fromRGB(200, 0, 0), 0.35, 0.5)
+		shake(2.5, 0.3)
+	end
+end
+
+AnimRemote.OnClientEvent:Connect(function(model: Model?, clipName: string, target: Model?)
+	if typeof(model) ~= "Instance" or not model.Parent then
+		return
+	end
+	local rig = getRig(model)
+	local clip = Anims.Clips[clipName]
+	rig.clipName = clipName
+	rig.clipStart = os.clock()
+	rig.clipLen = clip and clip.length or WOLF_CLIPS[clipName] or 1
+	local fx = Effects[clipName]
+	if fx then
+		task.spawn(fx, model, target)
+	end
+end)
+
+---------------------------------------------------------------- per-frame update
+local function updateCape(model: Model, rig: Rig, root: BasePart, t: number)
+	local cape = model:FindFirstChild("VampCape")
+	local weld = cape and cape:FindFirstChild("CapeWeld") :: Weld?
+	if not weld then
+		return
+	end
+	rig.capeBase = rig.capeBase or weld.C0
+	local v = root.AssemblyLinearVelocity
+	local speed = Vector3.new(v.X, 0, v.Z).Magnitude
+	local angle = 6 + math.min(speed, 45) * 1.5 + math.sin(t * 4 + speed * 0.1) * (2 + speed * 0.08)
+	weld.C0 = (rig.capeBase :: CFrame) * CFrame.Angles(-math.rad(angle), 0, math.rad(math.sin(t * 2.3) * 2))
+end
+
+local function updateVampFace(model: Model, rig: Rig)
+	local plr = Players:GetPlayerFromCharacter(model)
+	local hunting = rig.clipName == "Bite" or rig.clipName == "Compel" or rig.clipName == "Dash"
+	hunting = hunting and os.clock() - rig.clipStart < rig.clipLen + 0.5
+	local hungry = plr and (plr:GetAttribute("Blood") or 100) < 25
+	local night = ReplicatedStorage:GetAttribute("IsDay") == false
+	for _, p in model:GetChildren() do
+		if p.Name == "VampEye" then
+			p.Transparency = (hunting or hungry or night) and 0 or 1
+		elseif p.Name == "VampFang" then
+			p.Transparency = (hunting or hungry) and 0 or 1
+		end
+	end
+end
+
+local function updateWolf(wolf: Model, rig: Rig, root: BasePart, t: number, dt: number)
+	local v = root.AssemblyLinearVelocity
+	local speed = Vector3.new(v.X, 0, v.Z).Magnitude
+	rig.wolfPhase += dt * (3 + speed * 0.4)
+	local ph = rig.wolfPhase
+	local amp = math.clamp(speed / 26, 0, 1) * 0.9
+	local clipT = os.clock() - rig.clipStart
+	local clipW = 0
+	if rig.clipName and clipT < rig.clipLen then
+		clipW = math.sin(math.pi * clipT / rig.clipLen)
+	end
+	for _, p in wolf:GetChildren() do
+		local w = p:FindFirstChildOfClass("Weld")
+		if w then
+			local base = rig.wolfBases[w]
+			if not base then
+				base = w.C0
+				rig.wolfBases[w] = base
+			end
+			local n = p.Name
+			if n == "LegFL" or n == "LegBR" then
+				w.C0 = base * CFrame.Angles(math.sin(ph) * amp, 0, 0)
+			elseif n == "LegFR" or n == "LegBL" then
+				w.C0 = base * CFrame.Angles(-math.sin(ph) * amp, 0, 0)
+			elseif n == "Body" then
+				local lean = rig.clipName == "Howl" and clipW * 0.25 or 0
+				w.C0 = base * CFrame.new(0, math.abs(math.sin(ph)) * 0.3 * amp + math.sin(t * 2) * 0.05, 0) * CFrame.Angles(lean, 0, 0)
+			elseif n == "Tail" then
+				w.C0 = base * CFrame.Angles(math.sin(t * 3) * 0.1 - amp * 0.3, math.sin(t * (6 + speed * 0.2)) * 0.35, 0)
+			elseif n == "Head" then
+				local cf = CFrame.Angles(math.sin(t * 1.5) * 0.05 + math.sin(ph * 2) * 0.05 * amp, 0, 0)
+				if rig.clipName == "Howl" then
+					cf = CFrame.Angles(math.rad(55) * clipW, 0, 0)
+				elseif rig.clipName == "Claw" then
+					cf = CFrame.new(0, -0.3 * clipW, -1.4 * clipW) * CFrame.Angles(-0.35 * clipW, 0, 0)
+				end
+				w.C0 = base * cf
+			end
+		end
+	end
+end
+
+local function update(model: Model, t: number, dt: number)
+	local hum = model:FindFirstChildOfClass("Humanoid")
+	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local rig = rigs[model]
+	if not hum or not root or hum.Health <= 0 then
+		if rig and rig.active then
+			restore(rig)
+		end
+		return
+	end
+	rig = getRig(model)
+
+	local pose = {}
+	local any = false
+	local clipT = os.clock() - rig.clipStart
+	local clip = rig.clipName and Anims.Clips[rig.clipName]
+	if clip and clipT < clip.length then
+		Anims.Add(pose, Anims.Sample(clip, clipT))
+		any = true
+	end
+
+	local serverNow = workspace:GetServerTimeNow()
+	if (model:GetAttribute("StunnedUntil") or 0) > serverNow then
+		Anims.Add(pose, Anims.Loops.Stunned(t))
+		any = true
+	elseif (model:GetAttribute("BurningUntil") or 0) > serverNow then
+		Anims.Add(pose, Anims.Loops.Burning(t))
+		any = true
+	end
+
+	-- Townsfolk (or any rig) with no animation tracks get a procedural walk/idle.
+	local animator = hum:FindFirstChildOfClass("Animator")
+	if not animator or #animator:GetPlayingAnimationTracks() == 0 then
+		local v = root.AssemblyLinearVelocity
+		local speed = Vector3.new(v.X, 0, v.Z).Magnitude
+		Anims.Add(pose, speed > 0.8 and Anims.Loops.Walk(t, speed) or Anims.Loops.Idle(t))
+		any = true
+	end
+
+	if any then
+		if not rig.active then
+			captureJoints(model, rig)
+			rig.active = true
+		end
+		for name, j in rig.joints do
+			if j.motor.Parent then
+				local a = pose[name]
+				j.motor.C0 = a and j.base * CFrame.Angles(math.rad(a[1]), math.rad(a[2]), math.rad(a[3])) or j.base
+			end
+		end
+	elseif rig.active then
+		restore(rig)
+	end
+
+	updateCape(model, rig, root, t)
+	updateVampFace(model, rig)
+	local wolf = model:FindFirstChild("WolfBody")
+	if wolf then
+		updateWolf(wolf :: Model, rig, root, t, dt)
+	elseif next(rig.wolfBases) then
+		table.clear(rig.wolfBases)
+	end
+end
+
+local townsfolk = workspace:WaitForChild("Townsfolk", 10)
+
+RunService.RenderStepped:Connect(function(dt)
+	local t = os.clock()
+	for _, p in Players:GetPlayers() do
+		if p.Character then
+			update(p.Character, t, dt)
+		end
+	end
+	if townsfolk then
+		for _, m in townsfolk:GetChildren() do
+			if m:IsA("Model") then
+				update(m, t, dt)
+			end
+		end
+	end
+end)
+]]></ProtectedString></Properties></Item>
+<Item class="LocalScript" referent="RBX00000015"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[-- Moonlit Falls: HUD, side picker, keyboard + on-screen buttons, vampire dash.
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1332,6 +3012,7 @@ NotifyRemote.OnClientEvent:Connect(showToast)
 
 ---------------------------------------------------------------- side picker
 local menu = make("Frame", {
+	Name = "SideMenu",
 	AnchorPoint = Vector2.new(0.5, 0.5),
 	Position = UDim2.fromScale(0.5, 0.5),
 	Size = UDim2.new(0.92, 0, 0, 330),
@@ -1458,6 +3139,7 @@ local function useAbility(a)
 	lastUsed[a.id] = os.clock()
 	if a.id == "Dash" then
 		dash()
+		AbilityRemote:FireServer("Dash") -- so everyone sees the dash trail
 	else
 		AbilityRemote:FireServer(a.id)
 	end
@@ -1574,5 +3256,5 @@ end)
 </Item>
 </Item>
 </Item>
-<Item class="Teams" referent="RBX00000015"><Properties><string name="Name">Teams</string></Properties></Item>
+<Item class="Teams" referent="RBX00000019"><Properties><string name="Name">Teams</string></Properties></Item>
 </roblox>

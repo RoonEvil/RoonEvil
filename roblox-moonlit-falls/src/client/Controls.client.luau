@@ -129,6 +129,7 @@ NotifyRemote.OnClientEvent:Connect(showToast)
 
 ---------------------------------------------------------------- side picker
 local menu = make("Frame", {
+	Name = "SideMenu",
 	AnchorPoint = Vector2.new(0.5, 0.5),
 	Position = UDim2.fromScale(0.5, 0.5),
 	Size = UDim2.new(0.92, 0, 0, 330),
@@ -255,6 +256,7 @@ local function useAbility(a)
 	lastUsed[a.id] = os.clock()
 	if a.id == "Dash" then
 		dash()
+		AbilityRemote:FireServer("Dash") -- so everyone sees the dash trail
 	else
 		AbilityRemote:FireServer(a.id)
 	end

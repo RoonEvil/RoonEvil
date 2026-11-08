@@ -10,6 +10,7 @@ local Debris = game:GetService("Debris")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local MapBuilder = require(script.Parent:WaitForChild("MapBuilder"))
 local NPCs = require(script.Parent:WaitForChild("NPCs"))
+local Models = require(script.Parent:WaitForChild("Models"))
 
 ---------------------------------------------------------------- remotes
 local Remotes = Instance.new("Folder")
@@ -23,6 +24,7 @@ end
 local AbilityRemote = remote("Ability")
 local ChooseSideRemote = remote("ChooseSide")
 local NotifyRemote = remote("Notify")
+local AnimRemote = remote("Anim") -- (model, clipName, target?) played by every client
 Remotes.Parent = ReplicatedStorage
 
 ---------------------------------------------------------------- teams
@@ -133,6 +135,10 @@ local function burst(model: Model, color: Color3)
 	Debris:AddItem(pe, 1.5)
 end
 
+local function anim(model: Model, clip: string, target: Model?)
+	AnimRemote:FireAllClients(model, clip, target)
+end
+
 local function damage(attacker: Player?, target: Model, amount: number)
 	local hum = target:FindFirstChildOfClass("Humanoid")
 	if not hum or hum.Health <= 0 then
@@ -212,33 +218,20 @@ local function transform(char: Model)
 		return
 	end
 	char:SetAttribute("Transformed", true)
-	for _, p in char:GetDescendants() do
-		if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
-			p:SetAttribute("OrigColor", p.Color)
-			p.Color = Color3.fromRGB(70, 50, 35)
+	hum.WalkSpeed = 0
+	anim(char, "Transform")
+	notify(Players:GetPlayerFromCharacter(char), "🌕 พระจันทร์เต็มดวง... กระดูกเริ่มบิด คุณกำลังกลายร่าง!", GOLD)
+	task.delay(1.1, function()
+		if not char.Parent or hum.Health <= 0 or not isTransformed(char) then
+			return
 		end
-	end
-	hum.MaxHealth = Config.WolfForm.MaxHealth
-	hum.Health = hum.MaxHealth
-	hum.WalkSpeed = Config.WolfForm.WalkSpeed
-
-	local head = char:FindFirstChild("Head")
-	if head then
-		local bb = Instance.new("BillboardGui")
-		bb.Name = "WolfTag"
-		bb.Size = UDim2.fromOffset(60, 60)
-		bb.StudsOffset = Vector3.new(0, 3, 0)
-		bb.AlwaysOnTop = true
-		local t = Instance.new("TextLabel")
-		t.Size = UDim2.fromScale(1, 1)
-		t.BackgroundTransparency = 1
-		t.Text = "🐺"
-		t.TextScaled = true
-		t.Parent = bb
-		bb.Parent = head
-	end
-	burst(char, Color3.fromRGB(255, 200, 80))
-	notify(Players:GetPlayerFromCharacter(char), "🌕 พระจันทร์เต็มดวง... คุณกลายร่างเป็นหมาป่า!", GOLD)
+		Models.BuildWolf(char)
+		burst(char, Color3.fromRGB(90, 70, 50))
+		hum.MaxHealth = Config.WolfForm.MaxHealth
+		hum.Health = hum.MaxHealth
+		hum.WalkSpeed = Config.WolfForm.WalkSpeed
+		anim(char, "Howl")
+	end)
 end
 
 local function untransform(char: Model)
@@ -246,15 +239,8 @@ local function untransform(char: Model)
 		return
 	end
 	char:SetAttribute("Transformed", false)
-	for _, p in char:GetDescendants() do
-		if p:IsA("BasePart") and p:GetAttribute("OrigColor") then
-			p.Color = p:GetAttribute("OrigColor")
-		end
-	end
-	local tag = char:FindFirstChild("WolfTag", true)
-	if tag then
-		tag:Destroy()
-	end
+	Models.RemoveWolf(char)
+	burst(char, Color3.fromRGB(255, 220, 150))
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if hum then
 		hum.MaxHealth = Config.SideStats.Werewolf.MaxHealth
@@ -286,6 +272,7 @@ local Abilities = {}
 Abilities.Vampire = {
 	Bite = function(plr: Player, char: Model)
 		local target = nearest(char, 7, isSide("Human"))
+		anim(char, "Bite", target)
 		if not target then
 			notify(plr, "ไม่มีเหยื่ออยู่ใกล้ๆ 🩸")
 			return
@@ -301,6 +288,7 @@ Abilities.Vampire = {
 			return
 		end
 		damage(plr, target, 25)
+		anim(target, "Bitten", char)
 		burst(target, Color3.fromRGB(160, 0, 20))
 		plr:SetAttribute("Blood", math.min(Config.BLOOD_MAX, (plr:GetAttribute("Blood") or 0) + 35))
 		target:SetAttribute("BittenAt", now())
@@ -317,6 +305,7 @@ Abilities.Vampire = {
 			notify(plr, "ไม่มีใครให้สะกดจิตแถวนี้ 👁")
 			return
 		end
+		anim(char, "Compel", target)
 		local victim = Players:GetPlayerFromCharacter(target)
 		if vervainCount(target) > 0 then
 			notify(plr, "👁 สะกดจิตไม่ได้... คนนี้กินเวอร์เวนไว้", PURPLE)
@@ -324,20 +313,37 @@ Abilities.Vampire = {
 			return
 		end
 		stun(target, 4)
-		burst(target, Color3.fromRGB(255, 255, 255))
+		if target:GetAttribute("NPC") then
+			NPCs.Say(target, "...ค่ะ ฉันจะยืนนิ่งๆ 😶")
+			task.delay(4.2, function()
+				if target.Parent then
+					NPCs.Say(target, "เอ๊ะ เมื่อกี้ฉันทำอะไรอยู่นะ?")
+				end
+			end)
+		end
 		notify(plr, "👁 \"อยู่นิ่งๆ แล้วลืมทุกอย่างซะ\"", RED)
 		notify(victim, "😵 คุณถูกสะกดจิต... ขยับไม่ได้!", RED)
 	end,
 }
 
+local function dashFx(plr: Player, char: Model)
+	if getSide(plr) == "Werewolf" and not isTransformed(char) then
+		return
+	end
+	anim(char, "Dash")
+end
+Abilities.Vampire.Dash = dashFx
+
 Abilities.Human = {
 	Stake = function(plr: Player, char: Model)
 		local target = nearest(char, 6, isSide("Vampire"))
+		anim(char, "Stake", target)
 		if not target then
 			notify(plr, "ต้องเข้าใกล้แวมไพร์ก่อนถึงจะปักหลักได้ 🪵")
 			return
 		end
 		damage(plr, target, 35)
+		anim(target, "Hit")
 		burst(target, Color3.fromRGB(120, 80, 40))
 		addPoints(plr, 2)
 		notify(plr, "🪵 ปักหลักเข้าเต็มๆ!", GREEN)
@@ -355,6 +361,7 @@ Abilities.Human = {
 			return
 		end
 		useVervain(char)
+		anim(char, "Throw", target)
 		damage(plr, target, 15)
 		stun(target, 3)
 		burst(target, Color3.fromRGB(170, 90, 230))
@@ -366,9 +373,10 @@ Abilities.Human = {
 
 Abilities.Werewolf = {
 	Claw = function(plr: Player, char: Model)
-		local target = nearest(char, 7, function(m)
+		local target = nearest(char, isTransformed(char) and 9 or 7, function(m)
 			return sideOf(m) ~= "Werewolf"
 		end)
+		anim(char, "Claw", target)
 		if not target then
 			return
 		end
@@ -376,6 +384,7 @@ Abilities.Werewolf = {
 		local targetIsVamp = sideOf(target) == "Vampire"
 		local amount = wolf and (targetIsVamp and 45 or 30) or 12
 		damage(plr, target, amount)
+		anim(target, "Hit")
 		burst(target, Color3.fromRGB(200, 30, 30))
 		addPoints(plr, 1)
 		if wolf and targetIsVamp then
@@ -385,6 +394,7 @@ Abilities.Werewolf = {
 			notify(Players:GetPlayerFromCharacter(target), "☠️ โดนหมาป่ากัด! พิษกำลังกินร่าง...", RED)
 		end
 	end,
+	Dash = dashFx,
 }
 
 AbilityRemote.OnServerEvent:Connect(function(plr: Player, ability)
@@ -488,7 +498,7 @@ NPCs.Folder.ChildAdded:Connect(function(model)
 	end
 end)
 
-NPCs.Start(map.wanderPoints)
+NPCs.Start(map.wanderPoints, AnimRemote)
 
 ---------------------------------------------------------------- players
 local function isDay()
@@ -508,7 +518,14 @@ local function onCharacter(plr: Player, char: Model)
 	plr:SetAttribute("Blood", Config.BLOOD_START)
 
 	if side == "Werewolf" and isFullMoonNight() then
-		task.delay(1, transform, char)
+		task.delay(1.5, transform, char)
+	elseif side == "Vampire" then
+		-- Wait for the avatar to finish loading before adding the cape etc.
+		task.delay(1.2, function()
+			if char.Parent then
+				Models.DressVampire(char)
+			end
+		end)
 	end
 
 	hum.Died:Connect(function()
@@ -596,6 +613,7 @@ task.spawn(function()
 
 					if isDay() and not char:GetAttribute("HasRing") and inSunlight(char) then
 						hum:TakeDamage(Config.SUN_DAMAGE)
+					char:SetAttribute("BurningUntil", now() + 1.3)
 						local root = char:FindFirstChild("HumanoidRootPart")
 						if root and not root:FindFirstChild("SunFire") then
 							local fire = Instance.new("Fire")
