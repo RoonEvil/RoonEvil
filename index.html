@@ -58,6 +58,17 @@
   @keyframes avin { from { transform: scale(0); } }
   .share { flex: none; font: 600 13px "Prompt"; background: var(--neon); color: #03110a;
     border: 0; border-radius: 6px; padding: 7px 14px; }
+  .sos { flex: none; display: none; font: 800 13px "JetBrains Mono", monospace; letter-spacing: .08em; color: #fff;
+    background: #ff3b4e; border: 0; border-radius: 6px; padding: 7px 12px; box-shadow: 0 0 18px rgba(255,59,78,.6);
+    animation: avin .4s cubic-bezier(.2,1.6,.4,1) both, sosPulse 1s ease-in-out infinite .4s; }
+  .sos.on { display: block; }
+  .sos.used { animation: none; opacity: .4; box-shadow: none; }
+  @keyframes sosPulse { 50% { box-shadow: 0 0 34px rgba(255,59,78,.95); transform: scale(1.06); } }
+  .alarm { position: fixed; inset: 0; z-index: 380; pointer-events: none; box-shadow: inset 0 0 160px rgba(255,40,60,.55);
+    animation: alarm .5s ease-in-out 4 alternate both; }
+  @keyframes alarm { from { opacity: 0; } to { opacity: 1; } }
+  .cursor.tired svg { animation: droop 1.4s ease-in-out infinite; transform-origin: 2px 2px; }
+  @keyframes droop { 50% { transform: rotate(18deg) translateY(3px); } }
   .zoom { font-size: 12px; color: var(--muted); flex: none; }
   @media (max-width: 720px) {
     .tools, .zoom { display: none; }
@@ -286,6 +297,7 @@
     <div class="tool" data-t="ellipse">◯</div><div class="tool" data-t="pen">✒</div><div class="tool" data-t="text">T</div><div class="tool" data-t="comment">💬</div>
   </div>
   <div class="avatars" id="avatars"></div>
+  <button class="sos" id="sos">SOS</button>
   <span class="zoom mono">100%</span>
   <button class="share">Share</button>
 </header>
@@ -577,7 +589,7 @@ class Cursor {
   }
   async moveTo(x, y) {
     const d = Math.hypot(x - this.x, y - this.y);
-    const dur = Math.min(1150, 280 + d * 0.65);
+    const dur = Math.min(1150, 280 + d * 0.65) * (this.slow || 1);
     this.place(x, y, dur);
     await sleep(dur + 40);
   }
@@ -700,7 +712,7 @@ async function type(c, el, speed = 1) {
       const rects = rg.getClientRects(), last = rects[rects.length - 1], cr = canvas.getBoundingClientRect();
       if (last) c.place(last.right - cr.left + 6, last.bottom - cr.top - 4, 110);
     }
-    await sleep((ch === " " ? 70 : rand(28, 70)) / speed);
+    await sleep((ch === " " ? 70 : rand(28, 70)) / speed * (c.slow || 1));
   }
   live.innerHTML = el._html; // คืน markup เดิม (เช่น <em>)
   el.classList.remove("typing");
@@ -799,7 +811,10 @@ const SCRIPTS = [
     await type(c, $(f, ".kicker")); await type(c, $(f, "h1"), .9);
     await draw(c, $(f, ".badge"));
     await c.say("เหลืออีกเยอะเลยแฮะ 😅");
+    c.slow = 1.6;
     await type(c, $(f, ".lead"), 1.3);
+    await c.say("เริ่มเหนื่อยละ 😮‍💨");
+    c.slow = 2.2; c.el.classList.add("tired");
     await move(c, $(f, ".btn.primary"), -160, 90); await move(c, $(f, ".btn.ghost"), 160, 110);
   }),
   // 02 About
@@ -1012,22 +1027,27 @@ function join(c, x, y) {
 let teamDone;
 const teamReady = new Promise(r => teamDone = r);
 async function callTeam() {
-  const mint = C.Mint, share = document.querySelector(".share");
-  await mint.run(async c => {
-    await c.say("งานเยอะเกินคนเดียวแล้ว 😵‍💫", 2200); await sleep(1600);
-    await c.say("เรียกเพื่อนดีกว่า", 1800); await sleep(900);
+  const sos = document.getElementById("sos");
+  await C.Mint.run(async c => {
+    await c.say("เหนื่อยแล้ว... 🥵", 2200); await sleep(1500);
+    await c.say("ไม่ไหวแล้ววว ใครก็ได้ช่วยที", 2400); await sleep(1400);
+    sos.classList.add("on");
+    await sleep(700);
     c.el.style.zIndex = 450; // ให้อยู่เหนือ topbar
-    const r = rel(share);
+    const r = rel(sos);
+    c.slow = 1;
     await c.moveTo(r.x + r.w / 2 - 4, r.y + r.h / 2 - 4);
-    await c.click();
-    share.animate([{ transform: "scale(1)" }, { transform: "scale(1.15)", boxShadow: "0 0 30px #39ff88" }, { transform: "scale(1)" }], { duration: 450 });
-    toast(c, "เชิญทีม 9 คนเข้าไฟล์ ✉️");
-    activity(c, "แชร์ไฟล์ให้ทีม");
-    await sleep(500);
-    await c.moveTo(r.x - 220, r.y + 160);
+    await c.click(); await sleep(120); await c.click();
+    sos.classList.add("used");
+    const al = document.createElement("div"); al.className = "alarm"; document.body.appendChild(al);
+    setTimeout(() => al.remove(), 2200);
+    toast({ name: "Mint", color: "#ff3b4e" }, "🆘 ขอความช่วยเหลือด่วน!");
+    activity(c, "กด SOS 🆘");
+    await sleep(600);
+    await c.moveTo(r.x - 240, r.y + 180);
     c.el.style.zIndex = "";
   });
-  const hello = ["มาแล้ว!", "ช่วยด้วยๆ", "ว่าไงมิ้นท์ 👋", "ตรงไหนบ้าง", "มาาา", "☕ ถือกาแฟมาด้วย", "เปิดไฟล์แล้ว", "เย้", "ไปๆ ลุย"];
+  const hello = ["มาแล้วๆ!", "ไหวมั้ยมิ้นท์ 😂", "ทีมกู้ภัยมาแล้ว 🚑", "ตรงไหนบ้าง", "มาาา", "☕ เอากาแฟมาให้", "พักก่อนๆ", "เดี๋ยวช่วยเอง", "ไปๆ ลุย"];
   const cw = canvas.clientWidth, top = scrollY - canvasTop();
   for (const [k, c] of Object.values(C).filter(c => !c.joined).entries()) {
     join(c, rand(30, cw - 140), rand(top + 120, top + innerHeight - 180));
@@ -1036,7 +1056,8 @@ async function callTeam() {
     await sleep(reduce ? 0 : 450);
   }
   await sleep(1200);
-  await C.Mint.say("ขอบคุณทุกคน 💚 ลุยต่อ!", 2200);
+  C.Mint.slow = 1; C.Mint.el.classList.remove("tired");
+  await C.Mint.say("รอดแล้ว ขอบคุณทุกคน 💚", 2200);
   await sleep(1200);
   teamDone();
 }
