@@ -792,15 +792,16 @@ const all = (...ps) => Promise.all(ps);
 const job = (name, fn) => C[name].run(fn);
 
 const SCRIPTS = [
-  // 01 Hero
-  f => all(
-    job("Mint", async c => { await draw(c, $(f, ".avatar")); await fill(c, $(f, ".avatar")); await c.say("ใส่รูปแมวแทนดีมั้ย 🐈"); }),
-    job("Bank", async c => { await sleep(500); await type(c, $(f, ".kicker")); await type(c, $(f, "h1"), .8); await c.say("ชื่อใหญ่ๆ ไปเลย"); }),
-    job("Ploy", async c => { await sleep(1400); await draw(c, $(f, ".badge")); await sleep(2600); await type(c, $(f, ".lead"), 1.3); }),
-    job("Ice", async c => { await sleep(4200); await move(c, $(f, ".btn.primary"), -160, 90); await move(c, $(f, ".btn.ghost"), 160, 110);
-      await comment(c, $(f, ".btn.primary"), "ปุ่มนี้เรืองแสงได้อีก 💚"); }),
-    job("June", async c => { await sleep(7000); await c.say("ทุกคน ตรงนี้ไฟล์หลักนะ 👋"); }),
-  ),
+  // 01 Hero — Mint ทำคนเดียว
+  f => job("Mint", async c => {
+    await c.say("เริ่มเลยละกัน 💪");
+    await draw(c, $(f, ".avatar")); await fill(c, $(f, ".avatar"));
+    await type(c, $(f, ".kicker")); await type(c, $(f, "h1"), .9);
+    await draw(c, $(f, ".badge"));
+    await c.say("เหลืออีกเยอะเลยแฮะ 😅");
+    await type(c, $(f, ".lead"), 1.3);
+    await move(c, $(f, ".btn.primary"), -160, 90); await move(c, $(f, ".btn.ghost"), 160, 110);
+  }),
   // 02 About
   f => all(
     job("Tonkla", async c => { await draw(c, $(f, ".photo")); await fill(c, $(f, ".photo")); await c.say("แมวคือ brand ของภูมิ"); }),
@@ -899,8 +900,10 @@ function start(i) {
   if (started.has(i)) return started.get(i);
   const f = frames[i];
   frameLayer(f);
-  f.classList.add("live");
-  const p = SCRIPTS[i](f).then(() => sleep(600)).then(() => { f.classList.remove("live"); done.add(i); });
+  const pre = i > 0 ? teamReady : Promise.resolve();
+  let p = pre.then(() => { f.classList.add("live"); return SCRIPTS[i](f); }).then(() => sleep(600)).then(() => f.classList.remove("live"));
+  if (i === 0) p = p.then(callTeam);
+  p = p.then(() => done.add(i));
   started.set(i, p);
   if (i === frames.length - 1) p.then(finale);
   return p;
@@ -993,25 +996,61 @@ async function bootScreen() {
   clearInterval(timer);
 }
 
-/* ---------- boot: เปิดไฟล์ แล้วทีมทยอยเข้า ---------- */
+/* ---------- ทีมเข้าไฟล์ ---------- */
+const avs = document.getElementById("avatars");
+const AV_SHOW = innerWidth < 720 ? 3 : 6;
+let joinedCount = 0;
+function join(c, x, y) {
+  c.place(x, y, 0);
+  c.el.classList.add("in"); c.joined = true;
+  const k = joinedCount++;
+  if (k < AV_SHOW) avs.insertAdjacentHTML("afterbegin", `<span class="av" style="--cc:${c.color}">${c.name[0]}</span>`);
+  else { $(avs, ".more")?.remove(); avs.insertAdjacentHTML("afterbegin", `<span class="av more">+${k - AV_SHOW + 1}</span>`); }
+  c.wander();
+}
+
+let teamDone;
+const teamReady = new Promise(r => teamDone = r);
+async function callTeam() {
+  const mint = C.Mint, share = document.querySelector(".share");
+  await mint.run(async c => {
+    await c.say("งานเยอะเกินคนเดียวแล้ว 😵‍💫", 2200); await sleep(1600);
+    await c.say("เรียกเพื่อนดีกว่า", 1800); await sleep(900);
+    c.el.style.zIndex = 450; // ให้อยู่เหนือ topbar
+    const r = rel(share);
+    await c.moveTo(r.x + r.w / 2 - 4, r.y + r.h / 2 - 4);
+    await c.click();
+    share.animate([{ transform: "scale(1)" }, { transform: "scale(1.15)", boxShadow: "0 0 30px #39ff88" }, { transform: "scale(1)" }], { duration: 450 });
+    toast(c, "เชิญทีม 9 คนเข้าไฟล์ ✉️");
+    activity(c, "แชร์ไฟล์ให้ทีม");
+    await sleep(500);
+    await c.moveTo(r.x - 220, r.y + 160);
+    c.el.style.zIndex = "";
+  });
+  const hello = ["มาแล้ว!", "ช่วยด้วยๆ", "ว่าไงมิ้นท์ 👋", "ตรงไหนบ้าง", "มาาา", "☕ ถือกาแฟมาด้วย", "เปิดไฟล์แล้ว", "เย้", "ไปๆ ลุย"];
+  const cw = canvas.clientWidth, top = scrollY - canvasTop();
+  for (const [k, c] of Object.values(C).filter(c => !c.joined).entries()) {
+    join(c, rand(30, cw - 140), rand(top + 120, top + innerHeight - 180));
+    toast(c, "เข้าร่วมไฟล์");
+    c.say(hello[k % hello.length], 2000);
+    await sleep(reduce ? 0 : 450);
+  }
+  await sleep(1200);
+  await C.Mint.say("ขอบคุณทุกคน 💚 ลุยต่อ!", 2200);
+  await sleep(1200);
+  teamDone();
+}
+
+/* ---------- boot: เปิดไฟล์ — ตอนแรกมี Mint คนเดียว ---------- */
 (async () => {
   scrollTo(0, 0);
   await sleep(100);
   await bootScreen();
   document.getElementById("loader").classList.add("hide");
-  const avs = document.getElementById("avatars");
-  const shown = innerWidth < 720 ? 3 : 6;
-  for (const [k, c] of Object.values(C).entries()) {
-    const cw = canvas.clientWidth;
-    c.place(rand(40, cw - 140), rand(140, innerHeight - 160), 0);
-    c.el.classList.add("in"); c.joined = true;
-    if (k < shown) avs.insertAdjacentHTML("afterbegin", `<span class="av" style="--cc:${c.color}">${c.name[0]}</span>`);
-    else { $(avs, ".more")?.remove(); avs.insertAdjacentHTML("afterbegin", `<span class="av more">+${k - shown + 1}</span>`); }
-    if (k < 4 || k === TEAM.length - 1) toast(c, "เข้าร่วมไฟล์");
-    c.wander();
-    await sleep(220);
-  }
   await sleep(500);
+  join(C.Mint, canvas.clientWidth * .55, innerHeight * .55);
+  toast(C.Mint, "เปิดไฟล์");
+  await sleep(900);
   ready = true;
   tour();
 })();
