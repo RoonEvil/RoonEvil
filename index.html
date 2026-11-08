@@ -3,463 +3,984 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>About Me</title>
+<title>Phum Portfolio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Prompt:wght@300;400;600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Prompt:wght@300;400;500;600;800&display=swap" rel="stylesheet">
 <style>
   :root {
     color-scheme: dark;
-    --bg: #030705;
+    --bg: #070b09;
+    --panel: #0c1410;
+    --line: #18291f;
+    --frame: #06100b;
     --neon: #39ff88;
-    --ink: #d9ffe9;
-    --muted: #5f9a7b;
-    --mx: 50vw; --my: 40vh;
+    --lime: #b6ff3b;
+    --ink: #e2fff0;
+    --muted: #6c9a81;
+    --dim: #34503f;
+    --top: 48px;
+    --side-l: 0px; --side-r: 0px;
   }
+  @media (min-width: 1180px) { :root { --side-l: 232px; --side-r: 252px; } }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
   body {
     background: var(--bg);
+    background-image: radial-gradient(#15241b 1px, transparent 1px);
+    background-size: 20px 20px;
     color: var(--ink);
     font-family: "Prompt", system-ui, sans-serif;
     overflow-x: hidden;
-    cursor: crosshair;
   }
-  /* แสงเขียวตามเมาส์ + กริด + vignette */
-  .bg-grid {
-    position: fixed; inset: 0; z-index: 0; pointer-events: none;
-    background:
-      radial-gradient(600px circle at var(--mx) var(--my), rgba(57,255,136,.10), transparent 60%),
-      linear-gradient(rgba(57,255,136,.06) 1px, transparent 1px) 0 0 / 44px 44px,
-      linear-gradient(90deg, rgba(57,255,136,.06) 1px, transparent 1px) 0 0 / 44px 44px;
+  .mono { font-family: "JetBrains Mono", "Prompt", monospace; }
+
+  /* ================= Figma chrome ================= */
+  .topbar {
+    position: fixed; inset: 0 0 auto 0; height: var(--top); z-index: 400;
+    display: flex; align-items: center; gap: 12px; padding: 0 12px;
+    background: var(--panel); border-bottom: 1px solid var(--line);
   }
-  #rain { position: fixed; inset: 0; z-index: 0; opacity: .28; pointer-events: none; }
-  #trail { position: fixed; inset: 0; z-index: 95; pointer-events: none; }
-  .vignette {
-    position: fixed; inset: 0; z-index: 1; pointer-events: none;
-    background:
-      radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.75) 100%),
-      repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px);
+  .logo { width: 28px; height: 28px; border-radius: 7px; flex: none;
+    background: conic-gradient(from 45deg, var(--neon), var(--lime), #00e5b0, var(--neon));
+    box-shadow: 0 0 14px rgba(57,255,136,.5); }
+  .file { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .file span { color: var(--muted); }
+  .tools { display: flex; gap: 2px; margin: 0 auto; }
+  .tool { width: 32px; height: 32px; border-radius: 6px; display: grid; place-items: center;
+    color: var(--muted); font-size: 15px; transition: background .2s, color .2s; }
+  .tool.on { background: var(--neon); color: #03110a; box-shadow: 0 0 12px rgba(57,255,136,.6); }
+  .avatars { display: flex; flex-direction: row-reverse; }
+  .av { width: 28px; height: 28px; border-radius: 50%; margin-left: -7px; flex: none;
+    display: grid; place-items: center; font: 700 11px "JetBrains Mono", monospace; color: #03110a;
+    background: var(--cc); border: 2px solid var(--panel);
+    animation: avin .4s cubic-bezier(.2,1.6,.4,1) both; }
+  .av.more { background: #1b2c22; color: var(--ink); }
+  @keyframes avin { from { transform: scale(0); } }
+  .share { flex: none; font: 600 13px "Prompt"; background: var(--neon); color: #03110a;
+    border: 0; border-radius: 6px; padding: 7px 14px; }
+  .zoom { font-size: 12px; color: var(--muted); flex: none; }
+  @media (max-width: 720px) {
+    .tools, .zoom { display: none; }
+    .file { flex: 1; }
   }
 
-  #stage { position: relative; z-index: 2; width: 100%; min-height: 100vh; overflow: clip; }
+  .side { position: fixed; top: var(--top); bottom: 0; z-index: 300; background: var(--panel);
+    overflow-y: auto; display: none; font-size: 12px; scrollbar-width: thin; scrollbar-color: var(--dim) transparent; }
+  @media (min-width: 1180px) { .side { display: block; } }
+  .side.left { left: 0; width: var(--side-l); border-right: 1px solid var(--line); }
+  .side.right { right: 0; width: var(--side-r); border-left: 1px solid var(--line); }
+  .side h4 { margin: 0; padding: 12px 14px 8px; font: 600 11px "Prompt"; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  .layers, .layers ul { list-style: none; margin: 0; padding: 0; }
+  .layers li > div { display: flex; gap: 8px; align-items: center; padding: 5px 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    animation: lin .35s ease both; border-left: 2px solid transparent; }
+  .layers ul li > div { padding-left: 32px; color: #b8dcc8; }
+  .layers li > div.hot { background: rgba(57,255,136,.1); border-left-color: var(--cc, var(--neon)); }
+  .layers .ic { width: 14px; text-align: center; color: var(--muted); font-family: "JetBrains Mono", monospace; }
+  .layers .who { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--cc); flex: none; }
+  @keyframes lin { from { opacity: 0; transform: translateX(-8px); } }
 
-  /* ---------- notes ---------- */
-  .note {
-    --c: #39ff88;
-    position: absolute;
-    width: min(290px, 84vw);
-    padding: 18px 20px 16px;
-    border-radius: 10px;
-    background: linear-gradient(160deg, rgba(16,44,30,.92), rgba(4,14,9,.96));
-    border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
-    box-shadow:
-      0 0 26px color-mix(in srgb, var(--c) 28%, transparent),
-      inset 0 0 28px color-mix(in srgb, var(--c) 8%, transparent),
-      0 18px 40px rgba(0,0,0,.6);
-    color: var(--ink);
-    font-size: 16px; line-height: 1.6; font-weight: 300;
-    transform-origin: top left;
-    animation: pop .55s cubic-bezier(.2, 1.4, .4, 1) both;
-    rotate: var(--r, 0deg);
-    cursor: grab; user-select: none; touch-action: none;
-  }
-  /* มุมกรอบแบบ HUD */
-  .note::before, .note::after {
-    content: ""; position: absolute; width: 14px; height: 14px; border: 2px solid var(--c);
-    filter: drop-shadow(0 0 4px var(--c));
-  }
-  .note::before { top: -5px; left: -5px; border-right: 0; border-bottom: 0; }
-  .note::after { bottom: -5px; right: -5px; border-left: 0; border-top: 0; }
-  .note.dragging { cursor: grabbing; z-index: 50; box-shadow: 0 0 40px color-mix(in srgb, var(--c) 55%, transparent), 0 24px 50px rgba(0,0,0,.7); }
-  .note h3 {
-    margin: 0 0 8px; font: 700 13px "JetBrains Mono", "Prompt", monospace;
-    color: var(--c); letter-spacing: .04em; text-shadow: 0 0 8px var(--c);
-  }
-  .note h3::before { content: "// "; opacity: .6; }
-  .note .body { white-space: pre-wrap; word-break: break-word; min-height: 1.6em; }
-  .note .by { margin-top: 12px; font: 400 11px "JetBrains Mono", monospace; opacity: .7; letter-spacing: .05em; }
-  .note.typing .body::after {
-    content: ""; display: inline-block; width: .55em; height: 1.05em;
-    background: var(--c); box-shadow: 0 0 10px var(--c);
-    vertical-align: -3px; margin-left: 2px;
-    animation: blink .7s steps(1) infinite;
-  }
-  .note.title {
-    width: auto; max-width: 92vw; padding: 0;
-    background: none; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
-  }
-  .note.title::before, .note.title::after { display: none; }
-  .note.title h3 { font-size: clamp(13px, 1.8vw, 17px); color: var(--neon); }
-  .note.title h3::before { content: "> "; }
-  .note.title .body {
-    font-size: clamp(42px, 9vw, 104px); font-weight: 800; line-height: 1.1; letter-spacing: -.02em;
-    background: linear-gradient(100deg, #f2fff7 10%, #39ff88 45%, #b6ff3b 70%, #0aa860 95%);
-    background-size: 200% 100%;
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    filter: drop-shadow(0 0 22px rgba(57,255,136,.45));
-  }
-  .note.title.typing .body::after { background: var(--neon); }
-  .note.title.done .body { animation: shine 5s linear infinite, glitch 7s steps(1) infinite; }
-  .note.visitor .body:empty::before { content: attr(data-placeholder); opacity: .4; }
-  .note.visitor .body[contenteditable] { outline: none; cursor: text; user-select: text; }
+  .props { padding: 0 14px 14px; }
+  .prow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+  .field { background: #08100c; border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; display: flex; gap: 6px; }
+  .field i { color: var(--muted); font-style: normal; }
+  .sel-name { padding: 0 14px 10px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .sel-name .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--cc, var(--neon)); }
+  .swatch { display: flex; align-items: center; gap: 8px; background: #08100c; border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; }
+  .swatch b { width: 18px; height: 18px; border-radius: 4px; background: var(--sw, #1c2822); transition: background .4s; }
+  .activity { padding: 0 14px 14px; display: grid; gap: 6px; }
+  .activity div { color: #9cc4ae; animation: lin .3s ease both; }
+  .activity b { color: var(--cc); font-weight: 600; }
 
-  @keyframes pop {
-    0% { transform: scale(.5); opacity: 0; filter: blur(10px) brightness(3); }
-    60% { filter: blur(0) brightness(1.6); }
-    100% { transform: scale(1); opacity: 1; filter: none; }
-  }
+  /* ================= canvas ================= */
+  #canvas { position: relative; padding: calc(var(--top) + 64px) 16px 200px; margin: 0 var(--side-r) 0 var(--side-l); }
+  .frame { position: relative; max-width: 980px; margin: 0 auto 130px; background: var(--frame);
+    border: 1px solid var(--line); border-radius: 3px; padding: clamp(22px, 5vw, 56px);
+    box-shadow: 0 30px 80px rgba(0,0,0,.55); transition: border-color .4s, box-shadow .4s; }
+  .frame.live { border-color: rgba(57,255,136,.35); box-shadow: 0 0 0 1px rgba(57,255,136,.15), 0 30px 80px rgba(0,0,0,.55), 0 0 60px rgba(57,255,136,.06); }
+  .frame-label { position: absolute; top: -26px; left: 0; font: 12px "JetBrains Mono", monospace; color: var(--muted); }
+  .frame.live .frame-label { color: var(--neon); }
+
+  /* hidden until a cursor creates it */
+  .a { opacity: 0; transition: opacity .35s, filter .35s; }
+  .a.shown { opacity: 1; }
+  .fillable { position: relative; isolation: isolate; }
+  .fillable::before { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: 2;
+    background: repeating-linear-gradient(45deg, #17241d 0 8px, #1b2b22 8px 16px); transition: opacity .7s; pointer-events: none; }
+  .fillable.filled::before { opacity: 0; }
+  .tw { position: relative; }
+  .tw-ghost { visibility: hidden; }
+  .tw-live { position: absolute; inset: 0 0 auto 0; }
+  .tw.typing .tw-live::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-left: 1px; vertical-align: -.12em;
+    background: var(--tc, var(--neon)); animation: blink .7s steps(1) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
-  @keyframes shine { to { background-position: -200% 0; } }
-  @keyframes glitch {
-    0%, 100% { transform: none; }
-    91% { transform: translate(3px, -1px) skewX(-8deg); }
-    92% { transform: translate(-4px, 1px); }
-    93% { transform: none; }
-    96% { transform: translate(2px, 0) skewX(6deg); }
-    97% { transform: none; }
-  }
+  .is-sel { outline: 1.5px solid var(--sc); outline-offset: 3px; }
 
-  /* ---------- cursors ---------- */
-  .cursor {
-    position: absolute; left: 0; top: 0; z-index: 100; pointer-events: none;
-    transition: transform var(--dur, 900ms) cubic-bezier(.45, .05, .2, 1);
-    will-change: transform;
-  }
-  .cursor svg { display: block; filter: drop-shadow(0 0 6px var(--cc)) drop-shadow(0 0 2px var(--cc)); transition: transform .12s; }
-  .cursor.press svg { transform: scale(.78); }
-  .cursor .tag {
-    position: absolute; left: 16px; top: 21px;
-    padding: 3px 9px; border-radius: 3px 10px 10px 10px;
-    background: var(--cc); color: #03110a;
-    font: 700 11px "JetBrains Mono", monospace; letter-spacing: .03em; white-space: nowrap;
-    box-shadow: 0 0 14px var(--cc);
-  }
-  .ripple {
-    position: absolute; z-index: 90; pointer-events: none;
-    width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%;
-    border: 2px solid var(--cc); box-shadow: 0 0 16px var(--cc), inset 0 0 12px var(--cc);
-    animation: ripple .7s ease-out forwards;
-  }
-  @keyframes ripple { from { transform: scale(.15); opacity: 1; } to { transform: scale(2.2); opacity: 0; } }
+  /* ================= site content (the design being built) ================= */
+  .eyebrow { font: 600 12px "JetBrains Mono", monospace; color: var(--neon); letter-spacing: .1em; margin: 0 0 10px; }
+  h2.h { font-size: clamp(28px, 4.6vw, 44px); font-weight: 800; margin: 0 0 18px; line-height: 1.15; }
+  p { margin: 0; }
 
-  /* ---------- boot screen ---------- */
-  #boot {
-    position: fixed; inset: 0; z-index: 300; background: #010302;
-    display: flex; align-items: center; justify-content: center; padding: 16px;
-    font: 400 14px/1.8 "JetBrains Mono", monospace; color: var(--neon);
-    text-shadow: 0 0 8px rgba(57,255,136,.7);
-    transition: opacity .6s, visibility .6s;
-  }
-  #boot.hide { opacity: 0; visibility: hidden; }
-  #boot pre { margin: 0; white-space: pre-wrap; min-width: min(420px, 100%); }
-  #boot .ok { color: #b6ff3b; }
+  .hero { display: grid; grid-template-columns: 1fr auto; gap: 32px; align-items: center; }
+  .badge { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; padding: 6px 12px; border-radius: 99px;
+    border: 1px solid rgba(57,255,136,.4); color: var(--neon); background: rgba(57,255,136,.07); margin-bottom: 18px; }
+  .badge::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--neon); box-shadow: 0 0 10px var(--neon); }
+  .kicker { font-size: clamp(16px, 2.2vw, 20px); color: var(--muted); margin-bottom: 4px; }
+  .hero h1 { margin: 0 0 14px; font-size: clamp(48px, 9vw, 96px); font-weight: 800; line-height: 1.12; letter-spacing: -.02em; }
+  .hero h1 .tw-live { background: linear-gradient(100deg, #f2fff7, var(--neon) 50%, var(--lime));
+    -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 20px rgba(57,255,136,.35)); }
+  .lead { font-size: clamp(16px, 2vw, 19px); line-height: 1.7; color: #b5d9c5; max-width: 520px; font-weight: 300; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 26px; }
+  .btn { display: inline-block; padding: 12px 22px; border-radius: 10px; font-weight: 600; font-size: 15px; }
+  .btn.primary { background: var(--neon); color: #03110a; box-shadow: 0 0 24px rgba(57,255,136,.35); }
+  .btn.ghost { border: 1px solid #2b4a38; color: var(--ink); }
+  .avatar { width: clamp(150px, 24vw, 240px); aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center;
+    background: radial-gradient(circle at 30% 25%, #b6ff3b, #19c46a 45%, #04381d 100%);
+    box-shadow: 0 0 60px rgba(57,255,136,.3); font-size: clamp(60px, 10vw, 100px); font-weight: 800; color: #03110a; }
+  @media (max-width: 720px) { .hero { grid-template-columns: 1fr; } .avatar { order: -1; } }
 
-  /* ---------- toolbar ---------- */
-  .bar { position: fixed; right: 16px; bottom: 16px; z-index: 200; }
-  .bar button {
-    font: 700 13px "JetBrains Mono", "Prompt", monospace; letter-spacing: .04em;
-    border: 1px solid var(--neon); border-radius: 6px; padding: 10px 16px;
-    background: rgba(3,12,7,.85); color: var(--neon); cursor: pointer;
-    box-shadow: 0 0 18px rgba(57,255,136,.35), inset 0 0 12px rgba(57,255,136,.12);
-    text-shadow: 0 0 6px var(--neon); transition: background .2s, color .2s;
-  }
-  .bar button:hover { background: var(--neon); color: #03110a; text-shadow: none; }
-  .hint {
-    position: fixed; left: 16px; bottom: 22px; z-index: 200; max-width: calc(100vw - 190px);
-    font: 400 12px "JetBrains Mono", "Prompt", monospace; color: var(--muted);
-    opacity: 0; transition: opacity .6s;
-  }
-  .hint.show { opacity: 1; }
+  .about { display: grid; grid-template-columns: 260px 1fr; gap: 36px; align-items: start; }
+  .photo { aspect-ratio: 4/5; border-radius: 16px; display: grid; place-items: center; font-size: 72px;
+    background: linear-gradient(160deg, #0f3a24, #072014 60%, #b6ff3b22); border: 1px solid #1d3a2a; }
+  .bio { font-size: 17px; line-height: 1.85; color: #bcdccb; font-weight: 300; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+  .chip { padding: 8px 14px; border-radius: 99px; background: #0d1d15; border: 1px solid #1f3b2b; font-size: 14px; }
+  @media (max-width: 720px) { .about { grid-template-columns: 1fr; } .photo { max-width: 240px; } }
+
+  .skills { display: grid; gap: 18px; }
+  .skill { display: grid; grid-template-columns: 150px 1fr 48px; gap: 16px; align-items: center; font-size: 15px; }
+  .bar { height: 12px; border-radius: 99px; background: #0f1e16; border: 1px solid #1c3527; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; border-radius: inherit;
+    background: linear-gradient(90deg, #11a85a, var(--neon), var(--lime)); box-shadow: 0 0 14px rgba(57,255,136,.5); }
+  .skill b { font: 700 13px "JetBrains Mono", monospace; color: var(--neon); text-align: right; }
+  @media (max-width: 560px) { .skill { grid-template-columns: 100px 1fr 40px; gap: 10px; font-size: 14px; } }
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .card { border-radius: 16px; background: #0a1811; border: 1px solid #1b3426; padding: 14px 14px 18px; }
+  .thumb { aspect-ratio: 16/11; border-radius: 10px; display: grid; place-items: center; font-size: 54px; margin-bottom: 14px; background: var(--g); }
+  .card h3 { margin: 0 0 6px; font-size: 19px; }
+  .card p { font-size: 14px; color: #a6c9b5; line-height: 1.6; font-weight: 300; }
+  .tags { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  .tag { font: 11px "JetBrains Mono", monospace; padding: 4px 8px; border-radius: 6px; background: rgba(57,255,136,.1); color: var(--neon); }
+  @media (max-width: 860px) { .cards { grid-template-columns: 1fr; } }
+
+  .tl { list-style: none; margin: 0; padding: 0 0 0 34px; position: relative; display: grid; gap: 30px; }
+  .tl::before { content: ""; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px;
+    background: linear-gradient(var(--neon), var(--lime), #0aa860); box-shadow: 0 0 10px var(--neon);
+    transform: scaleY(0); transform-origin: top; transition: transform var(--ld, 1.6s) cubic-bezier(.45,.05,.2,1); }
+  .tl.drawn::before { transform: scaleY(1); }
+  .tl li { position: relative; }
+  .tl li::before { content: ""; position: absolute; left: -32px; top: 5px; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--frame); border: 2px solid var(--neon); box-shadow: 0 0 10px var(--neon); }
+  .tl b { display: block; font: 700 14px "JetBrains Mono", monospace; color: var(--neon); margin-bottom: 2px; }
+  .tl span { font-size: 17px; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .stat { padding: 22px 18px; border-radius: 14px; background: #0a1811; border: 1px solid #1b3426; }
+  .stat b { display: block; font-size: clamp(34px, 5vw, 48px); font-weight: 800; color: var(--neon); text-shadow: 0 0 20px rgba(57,255,136,.4); line-height: 1.1; }
+  .stat span { font-size: 14px; color: var(--muted); }
+  @media (max-width: 760px) { .stats { grid-template-columns: 1fr 1fr; } }
+
+  .board { position: relative; height: 480px; border-radius: 14px; background: #040c08; border: 1px dashed #1d3a2a; overflow: hidden; }
+  .shape { position: absolute; display: grid; place-items: center; }
+  .s-circle { left: 6%; top: 10%; width: clamp(110px, 18vw, 170px); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 35% 30%, var(--lime), #0e8f4c); }
+  .s-square { left: 34%; top: 50%; width: clamp(100px, 15vw, 140px); aspect-ratio: 1; border-radius: 22px; background: linear-gradient(135deg, #00e5b0, #065f46); rotate: 12deg; }
+  .s-star { left: 60%; top: 8%; width: clamp(110px, 16vw, 150px); aspect-ratio: 1; background: var(--neon);
+    clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+  .s-blob { left: 72%; top: 52%; width: clamp(120px, 18vw, 180px); aspect-ratio: 1.2; border-radius: 42% 58% 63% 37% / 45% 39% 61% 55%; background: linear-gradient(200deg, #1fd46e, #034d27); }
+  .s-word { left: 8%; top: 64%; font-size: clamp(30px, 6vw, 56px); font-weight: 800; color: var(--ink); letter-spacing: -.02em; }
+  .s-word em { font-style: normal; color: var(--neon); }
+  .s-pill { left: 30%; top: 14%; padding: 10px 18px; border-radius: 99px; background: #0d1d15; border: 1px solid var(--neon); color: var(--neon); font: 600 14px "JetBrains Mono", monospace; }
+  .s-cat { left: 50%; top: 34%; font-size: 64px; filter: drop-shadow(0 0 16px rgba(57,255,136,.4)); }
+  @media (max-width: 720px) { .board { height: 520px; } .s-blob { left: 52%; top: 66%; } .s-star { left: 58%; } .s-cat { left: 62%; top: 38%; } .s-square { left: 22%; top: 40%; } .s-word { top: 76%; } .s-pill { left: 8%; top: 46%; } }
+
+  .stickies { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .sticky { padding: 18px; border-radius: 4px; min-height: 140px; color: #04140b; background: var(--sbg); rotate: var(--rot, 0deg);
+    box-shadow: 0 10px 24px rgba(0,0,0,.45); display: flex; flex-direction: column; }
+  .sticky p { font-size: 16px; line-height: 1.55; font-weight: 500; flex: 1; }
+  .sticky small { margin-top: 12px; font: 700 11px "JetBrains Mono", monospace; opacity: .7; }
+  @media (max-width: 760px) { .stickies { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 480px) { .stickies { grid-template-columns: 1fr; } }
+
+  .contact { text-align: center; padding: 20px 0; }
+  .contact h2.h { font-size: clamp(34px, 7vw, 68px); }
+  .contact h2 .tw-live { background: linear-gradient(100deg, #f2fff7, var(--neon), var(--lime)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .mail { font: 700 clamp(18px, 3.4vw, 28px) "JetBrains Mono", monospace; color: var(--neon); }
+  .socials { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 26px 0; }
+  .social { padding: 10px 18px; border-radius: 99px; border: 1px solid #24432f; background: #0b1912; font-size: 14px; }
+  .foot { margin-top: 36px; font: 12px "JetBrains Mono", monospace; color: var(--muted); }
+
+  /* ================= multiplayer layer ================= */
+  .cursor { position: absolute; left: 0; top: 0; z-index: 250; pointer-events: none; opacity: 0;
+    transition: transform var(--dur, 900ms) cubic-bezier(.45,.05,.2,1), opacity .4s; will-change: transform; }
+  .cursor.in { opacity: .45; }
+  .cursor.in.busy, .cursor.in.talk { opacity: 1; }
+  @media (max-width: 720px) { .cursor .tag { font-size: 10px; padding: 2px 6px; } .cursor.in { opacity: .3; } .cursor.in.busy, .cursor.in.talk { opacity: 1; } }
+  .cursor svg { display: block; filter: drop-shadow(0 0 5px var(--cc)); transition: transform .12s; }
+  .cursor.down svg { transform: scale(.8); }
+  .cursor .tag { position: absolute; left: 15px; top: 20px; padding: 3px 8px; border-radius: 3px 9px 9px 9px;
+    background: var(--cc); color: #03110a; font: 700 11px "JetBrains Mono", monospace; white-space: nowrap; box-shadow: 0 0 12px color-mix(in srgb, var(--cc) 60%, transparent); }
+  .cursor .chat { position: absolute; left: 15px; top: 44px; padding: 7px 12px; border-radius: 4px 14px 14px 14px; max-width: 220px; width: max-content;
+    background: var(--cc); color: #03110a; font: 500 13px "Prompt"; transform: scale(0); transform-origin: top left; transition: transform .25s cubic-bezier(.2,1.5,.4,1); }
+  .cursor .chat.on { transform: scale(1); }
+  .sel { position: absolute; z-index: 240; pointer-events: none; border: 1.5px solid var(--cc); transition: opacity .4s; }
+  .sel.ellipse { border-radius: 50%; }
+  .sel.fade { opacity: 0; }
+  .sel i { position: absolute; width: 7px; height: 7px; background: #fff; border: 1.5px solid var(--cc); }
+  .sel i:nth-child(1) { left: -4px; top: -4px; } .sel i:nth-child(2) { right: -4px; top: -4px; }
+  .sel i:nth-child(3) { left: -4px; bottom: -4px; } .sel i:nth-child(4) { right: -4px; bottom: -4px; }
+  .sel.ellipse i { display: none; }
+  .sel .dim { position: absolute; left: 50%; bottom: -26px; translate: -50% 0; background: var(--cc); color: #03110a;
+    font: 700 10px "JetBrains Mono", monospace; padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
+  .ripple { position: absolute; z-index: 245; pointer-events: none; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%;
+    border: 2px solid var(--cc); animation: ripple .6s ease-out forwards; }
+  @keyframes ripple { from { transform: scale(.2); opacity: 1; } to { transform: scale(1.8); opacity: 0; } }
+
+  .pin { position: absolute; z-index: 235; display: flex; align-items: flex-start; gap: 0; animation: avin .35s cubic-bezier(.2,1.6,.4,1) both; }
+  .pin .pa { width: 30px; height: 30px; border-radius: 50% 50% 50% 0; background: var(--cc); color: #03110a; display: grid; place-items: center;
+    font: 700 12px "JetBrains Mono", monospace; box-shadow: 0 0 14px color-mix(in srgb, var(--cc) 50%, transparent); flex: none; }
+  .pin .pb { margin-left: 8px; background: #0c1711; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 13px;
+    width: max-content; max-width: 220px; box-shadow: 0 10px 24px rgba(0,0,0,.5); transform-origin: left top; transition: transform .3s, opacity .3s; }
+  .pin .pb b { display: block; font-size: 11px; color: var(--cc); margin-bottom: 2px; }
+  .pin.closed .pb { transform: scale(.6); opacity: 0; }
+
+  /* ================= overlays ================= */
+  #loader { position: fixed; inset: 0; z-index: 900; background: #030705; display: grid; place-items: center; transition: opacity .5s, visibility .5s; }
+  #loader.hide { opacity: 0; visibility: hidden; }
+  .ld { width: min(320px, 80vw); text-align: center; font-size: 14px; color: var(--muted); }
+  .ld .logo { margin: 0 auto 18px; width: 44px; height: 44px; border-radius: 11px; }
+  .ld .track { height: 3px; background: #11221a; border-radius: 9px; margin-top: 14px; overflow: hidden; }
+  .ld .track i { display: block; height: 100%; width: 0; background: var(--neon); box-shadow: 0 0 10px var(--neon); transition: width 1.3s ease; }
+
+  .toasts { position: fixed; left: 50%; translate: -50% 0; top: calc(var(--top) + 12px); z-index: 500; display: grid; gap: 6px; justify-items: center; pointer-events: none; }
+  .toast { background: #0d1a13; border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px 6px 8px; font-size: 13px;
+    display: flex; gap: 8px; align-items: center; animation: tin .3s ease both; box-shadow: 0 8px 20px rgba(0,0,0,.5); }
+  .toast .av { margin: 0; width: 22px; height: 22px; font-size: 9px; animation: none; border: 0; }
+  .toast.out { animation: tout .3s ease forwards; }
+  @keyframes tin { from { opacity: 0; transform: translateY(-8px); } }
+  @keyframes tout { to { opacity: 0; transform: translateY(-8px); } }
+
+  .dock { position: fixed; right: calc(var(--side-r) + 16px); bottom: 16px; z-index: 450; display: flex; gap: 8px; }
+  .dock button { font: 600 13px "Prompt"; border: 1px solid var(--neon); border-radius: 8px; padding: 9px 14px; cursor: pointer;
+    background: rgba(5,14,9,.92); color: var(--neon); box-shadow: 0 0 16px rgba(57,255,136,.25); }
+  .dock button.on { background: var(--neon); color: #03110a; }
+
+  .confetti { position: fixed; top: -20px; z-index: 600; width: 9px; height: 14px; pointer-events: none; animation: fall linear forwards; }
+  @keyframes fall { to { transform: translateY(110vh) rotate(720deg); } }
 
   @media (prefers-reduced-motion: reduce) {
     .cursor { transition-duration: 0ms !important; }
-    .note, .note.title.done .body { animation: none; }
-    #rain { display: none; }
   }
 </style>
 </head>
 <body>
-<canvas id="rain"></canvas>
-<div class="bg-grid"></div>
-<div class="vignette"></div>
-<div id="stage"></div>
-<canvas id="trail"></canvas>
-<div id="boot"><pre id="bootText"></pre></div>
-<div class="hint" id="hint">&gt; คลิกที่ว่างเพื่อทิ้งข้อความ · ลากโน้ตได้</div>
-<div class="bar"><button id="replay">↻ REPLAY</button></div>
+
+<div id="loader"><div class="ld"><div class="logo"></div><div>กำลังเปิด <b style="color:var(--ink)">ภูมิ — Portfolio.fig</b></div><div class="track"><i id="ldbar"></i></div></div></div>
+
+<header class="topbar">
+  <div class="logo"></div>
+  <div class="file"><span>Drafts /</span> ภูมิ — Portfolio</div>
+  <div class="tools" id="tools">
+    <div class="tool on" data-t="move">➤</div><div class="tool" data-t="frame">#</div><div class="tool" data-t="rect">▭</div>
+    <div class="tool" data-t="ellipse">◯</div><div class="tool" data-t="pen">✒</div><div class="tool" data-t="text">T</div><div class="tool" data-t="comment">💬</div>
+  </div>
+  <div class="avatars" id="avatars"></div>
+  <span class="zoom mono">100%</span>
+  <button class="share">Share</button>
+</header>
+
+<aside class="side left"><h4>Layers</h4><ul class="layers" id="layers"></ul></aside>
+<aside class="side right" id="right">
+  <h4>Design</h4>
+  <div class="sel-name" id="pName"><span class="dot"></span><span>—</span></div>
+  <div class="props">
+    <div class="prow"><div class="field mono"><i>X</i><span id="pX">0</span></div><div class="field mono"><i>Y</i><span id="pY">0</span></div></div>
+    <div class="prow"><div class="field mono"><i>W</i><span id="pW">0</span></div><div class="field mono"><i>H</i><span id="pH">0</span></div></div>
+    <div class="swatch mono" id="pFill"><b></b><span>Fill</span></div>
+  </div>
+  <h4>Activity</h4>
+  <div class="activity" id="activity"></div>
+</aside>
+
+<div class="toasts" id="toasts"></div>
+
+<main id="canvas">
+
+  <section class="frame" data-name="01 — Hero">
+    <div class="frame-label">#&nbsp; 01 — Hero</div>
+    <div class="hero">
+      <div>
+        <span class="badge a" data-name="Badge">Available for work</span>
+        <p class="kicker" data-type data-name="Kicker">สวัสดีครับ ผมชื่อ</p>
+        <h1 data-type data-name="Name">ภูมิ ใจดีมาก</h1>
+        <p class="lead" data-type data-name="Tagline">Frontend Developer & Motion Designer จากเชียงใหม่ ชอบทำเว็บที่ขยับได้ กับเลี้ยงแมวที่ไม่ค่อยขยับ</p>
+        <div class="row"><span class="btn primary a" data-name="Button / Primary">ดูผลงาน →</span><span class="btn ghost a" data-name="Button / Ghost">ติดต่อ</span></div>
+      </div>
+      <div class="avatar a fillable" data-name="Avatar" data-shape="ellipse" data-fill="#39FF88">ภ</div>
+    </div>
+  </section>
+
+  <section class="frame" data-name="02 — About">
+    <div class="frame-label">#&nbsp; 02 — About</div>
+    <div class="about">
+      <div class="photo a fillable" data-name="Photo" data-fill="#0F3A24">🐈</div>
+      <div>
+        <p class="eyebrow" data-type data-name="Eyebrow">// ABOUT ME</p>
+        <h2 class="h" data-type data-name="Heading">เกี่ยวกับผม</h2>
+        <p class="bio" data-type data-name="Bio">เริ่มเขียนเว็บตอน ม.4 เพราะอยากแต่งหน้า Hi5 ให้สวยกว่าเพื่อน ตอนนี้ทำงานกับทีมดีไซน์ เปลี่ยนไฟล์ Figma ให้กลายเป็นเว็บที่ใช้งานได้จริง เชื่อว่าแอนิเมชันที่ดีต้องช่วยให้คนเข้าใจ ไม่ใช่แค่ทำให้ตาลาย</p>
+        <div class="chips">
+          <span class="chip a" data-name="Chip / City">📍 เชียงใหม่</span><span class="chip a" data-name="Chip / Age">🎂 25 ปี</span>
+          <span class="chip a" data-name="Chip / Cat">🐈 ทาสแมว</span><span class="chip a" data-name="Chip / Coffee">☕ สายลาเต้</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="frame" data-name="03 — Skills">
+    <div class="frame-label">#&nbsp; 03 — Skills</div>
+    <p class="eyebrow" data-type data-name="Eyebrow">// SKILLS</p>
+    <h2 class="h" data-type data-name="Heading">ของที่ถนัด</h2>
+    <div class="skills">
+      <div class="skill a" data-name="Skill / React"><span>React</span><div class="bar"><i data-v="92"></i></div><b>0%</b></div>
+      <div class="skill a" data-name="Skill / TypeScript"><span>TypeScript</span><div class="bar"><i data-v="85"></i></div><b>0%</b></div>
+      <div class="skill a" data-name="Skill / CSS"><span>CSS & Animation</span><div class="bar"><i data-v="96"></i></div><b>0%</b></div>
+      <div class="skill a" data-name="Skill / Figma"><span>Figma</span><div class="bar"><i data-v="80"></i></div><b>0%</b></div>
+      <div class="skill a" data-name="Skill / Three.js"><span>Three.js</span><div class="bar"><i data-v="62"></i></div><b>0%</b></div>
+      <div class="skill a" data-name="Skill / ตื่นเช้า"><span>ตื่นเช้า 😴</span><div class="bar"><i data-v="12"></i></div><b>0%</b></div>
+    </div>
+  </section>
+
+  <section class="frame" data-name="04 — Projects">
+    <div class="frame-label">#&nbsp; 04 — Projects</div>
+    <p class="eyebrow" data-type data-name="Eyebrow">// SELECTED WORK</p>
+    <h2 class="h" data-type data-name="Heading">ผลงานที่ภูมิใจ</h2>
+    <div class="cards">
+      <article class="card a" data-name="Card / KhaoTom Shop">
+        <div class="thumb fillable" data-name="Thumb" data-fill="#16A34A" style="--g:linear-gradient(135deg,#0d6b3a,#39ff88)">🛒</div>
+        <h3 data-type data-name="Title">KhaoTom Shop</h3>
+        <p data-type data-name="Desc">ร้านของใช้แมวออนไลน์ ยอดขายดีกว่าที่คิด แมวไม่ช่วยอะไรเลย</p>
+        <div class="tags"><span class="tag a">Next.js</span><span class="tag a">Stripe</span></div>
+      </article>
+      <article class="card a" data-name="Card / Lanna Weather">
+        <div class="thumb fillable" data-name="Thumb" data-fill="#00E5B0" style="--g:linear-gradient(135deg,#064e3b,#00e5b0)">🌦️</div>
+        <h3 data-type data-name="Title">Lanna Weather</h3>
+        <p data-type data-name="Desc">แอปพยากรณ์อากาศ ที่บอกด้วยว่าวันนี้ควรพกเสื้อกันหนาวไหม</p>
+        <div class="tags"><span class="tag a">React Native</span><span class="tag a">API</span></div>
+      </article>
+      <article class="card a" data-name="Card / Pixel Garden">
+        <div class="thumb fillable" data-name="Thumb" data-fill="#B6FF3B" style="--g:linear-gradient(135deg,#365314,#b6ff3b)">🌱</div>
+        <h3 data-type data-name="Title">Pixel Garden</h3>
+        <p data-type data-name="Desc">เกมปลูกผักบนเว็บ ผักโตจริงตามเวลาจริง ใจเย็นๆ นะ</p>
+        <div class="tags"><span class="tag a">Canvas</span><span class="tag a">WebGL</span></div>
+      </article>
+    </div>
+  </section>
+
+  <section class="frame" data-name="05 — Journey">
+    <div class="frame-label">#&nbsp; 05 — Journey</div>
+    <p class="eyebrow" data-type data-name="Eyebrow">// JOURNEY</p>
+    <h2 class="h" data-type data-name="Heading">เส้นทางที่ผ่านมา</h2>
+    <ol class="tl" data-name="Timeline line">
+      <li class="a" data-name="2017"><b>2017</b><span data-type data-name="Text">เขียน HTML หน้าแรกในชีวิต (มี marquee ด้วย)</span></li>
+      <li class="a" data-name="2021"><b>2021</b><span data-type data-name="Text">จบวิศวะคอมฯ เชียงใหม่</span></li>
+      <li class="a" data-name="2022"><b>2022</b><span data-type data-name="Text">เข้าสตาร์ทอัพ ได้เรียนรู้ว่า "ด่วน" แปลว่าเมื่อวาน</span></li>
+      <li class="a" data-name="2024"><b>2024</b><span data-type data-name="Text">ออกมาเป็นฟรีแลนซ์ ทำงานกับลูกค้า 6 ประเทศ</span></li>
+      <li class="a" data-name="2026"><b>2026</b><span data-type data-name="Text">กำลังทำแอปของตัวเอง 🚀</span></li>
+    </ol>
+  </section>
+
+  <section class="frame" data-name="06 — Numbers">
+    <div class="frame-label">#&nbsp; 06 — Numbers</div>
+    <p class="eyebrow" data-type data-name="Eyebrow">// BY THE NUMBERS</p>
+    <h2 class="h" data-type data-name="Heading">ตัวเลขที่ไม่ได้โม้</h2>
+    <div class="stats">
+      <div class="stat a" data-name="Stat / Projects"><b data-count="42">0</b><span>โปรเจกต์ที่ปิดจ็อบ</span></div>
+      <div class="stat a" data-name="Stat / Coffee"><b data-count="1280">0</b><span>แก้วลาเต้</span></div>
+      <div class="stat a" data-name="Stat / Clients"><b data-count="37">0</b><span>ลูกค้าที่ยิ้มได้</span></div>
+      <div class="stat a" data-name="Stat / Bugs"><b data-count="99">0</b><span>บั๊กที่ยังหาไม่เจอ</span></div>
+    </div>
+  </section>
+
+  <section class="frame" data-name="07 — Moodboard">
+    <div class="frame-label">#&nbsp; 07 — Moodboard</div>
+    <p class="eyebrow" data-type data-name="Eyebrow">// MOODBOARD</p>
+    <h2 class="h" data-type data-name="Heading">สไตล์ที่ชอบ</h2>
+    <div class="board" data-name="Board">
+      <div class="shape s-circle a fillable" data-shape="ellipse" data-name="Ellipse" data-fill="#B6FF3B"></div>
+      <div class="shape s-square a fillable" data-name="Rectangle" data-fill="#00E5B0"></div>
+      <div class="shape s-star a fillable" data-name="Star" data-fill="#39FF88"></div>
+      <div class="shape s-blob a fillable" data-name="Blob" data-fill="#1FD46E"></div>
+      <div class="shape s-pill a" data-name="Pill">#calm #neon</div>
+      <div class="shape s-cat a" data-name="Sticker / Cat">🐈‍⬛</div>
+      <div class="shape s-word" data-type data-name="Word">neon <em>but</em> calm</div>
+    </div>
+  </section>
+
+  <section class="frame" data-name="08 — Team says">
+    <div class="frame-label">#&nbsp; 08 — Team says</div>
+    <p class="eyebrow" data-type data-name="Eyebrow">// WHAT THE TEAM SAYS</p>
+    <h2 class="h" data-type data-name="Heading">เพื่อนร่วมงานว่าไง</h2>
+    <div class="stickies">
+      <div class="sticky a" style="--sbg:#b6ff3b;--rot:-2deg" data-name="Sticky / Fah"><p data-type>ภูมิแก้งานไวมาก ส่งเช้าได้บ่าย</p><small>— Fah</small></div>
+      <div class="sticky a" style="--sbg:#39ff88;--rot:1.5deg" data-name="Sticky / Nont"><p data-type>โค้ดอ่านง่าย คอมเมนต์ก็ตลก</p><small>— Nont</small></div>
+      <div class="sticky a" style="--sbg:#5eead4;--rot:-1deg" data-name="Sticky / June"><p data-type>ขอสูตรลาเต้หน่อยได้มั้ย</p><small>— June</small></div>
+      <div class="sticky a" style="--sbg:#86efac;--rot:2deg" data-name="Sticky / Kao"><p data-type>แอนิเมชันลื่นจนอยากดูซ้ำ</p><small>— Kao</small></div>
+      <div class="sticky a" style="--sbg:#d9f99d;--rot:-1.5deg" data-name="Sticky / Pim"><p data-type>แมวชื่อข้าวต้มจริงๆ นะ ไม่ได้มุก</p><small>— Pim</small></div>
+      <div class="sticky a" style="--sbg:#2dd4bf;--rot:1deg" data-name="Sticky / Tonkla"><p data-type>10/10 อยากร่วมงานอีก</p><small>— Tonkla</small></div>
+    </div>
+  </section>
+
+  <section class="frame" data-name="09 — Contact">
+    <div class="frame-label">#&nbsp; 09 — Contact</div>
+    <div class="contact">
+      <p class="eyebrow" data-type data-name="Eyebrow">// LET'S TALK</p>
+      <h2 class="h" data-type data-name="Heading">มาทำอะไรสนุกๆ ด้วยกัน</h2>
+      <p class="mail" data-type data-name="Email">phum@example.com</p>
+      <div class="socials">
+        <span class="social a" data-name="Social / GitHub">🐙 GitHub</span><span class="social a" data-name="Social / Dribbble">🏀 Dribbble</span>
+        <span class="social a" data-name="Social / LinkedIn">💼 LinkedIn</span><span class="social a" data-name="Social / X">🐦 @phum.codes</span>
+      </div>
+      <span class="btn primary a" data-name="CTA">ส่งข้อความหาภูมิ →</span>
+      <p class="foot" data-type data-name="Footer">designed live by 10 คน (สมมติ) · 2026</p>
+    </div>
+  </section>
+
+  <div id="layer"></div>
+</main>
+
+<div class="dock">
+  <button id="tourBtn" class="on">⏸ Auto tour</button>
+  <button id="replay">↻ Replay</button>
+</div>
 
 <script>
 /* =========================================================
-   ✏️ ข้อมูล (สมมติ) — แก้ตรงนี้
-   x, y = ตำแหน่งบนจอใหญ่ (เปอร์เซ็นต์), color = สีเรืองแสงของโน้ต
+   ทีม (สมมติ) — ชื่อ + สีเคอร์เซอร์
    ========================================================= */
-const NOTES = [
-  { type: "title", title: "สวัสดีครับ ผมชื่อ", text: "ภูมิ ใจดีมาก", x: 6, y: 8, by: "Mint" },
-  { title: "ตอนนี้ทำอะไรอยู่", text: "Frontend Developer ที่เชียงใหม่\nกลางวันเขียนโค้ด กลางคืนแก้บั๊ก", x: 8, y: 42, color: "#39ff88", by: "Bank" },
-  { title: "ชอบอะไร", text: "☕ ลาเต้หวานน้อย\n🐈 แมวส้มชื่อข้าวต้ม\n🎧 Lo-fi ตอนทำงาน", x: 40, y: 36, color: "#00e5b0", by: "Ploy" },
-  { title: "สกิล", text: "React · TypeScript · CSS\nFigma · Motion design", x: 70, y: 14, color: "#b6ff3b", by: "Mint" },
-  { title: "เป้าหมายปีนี้", text: "ปล่อยแอปของตัวเองสักตัว 🚀\nและนอนก่อนตีสองให้ได้", x: 68, y: 54, color: "#7dffb2", by: "Bank" },
-  { title: "ติดต่อ", text: "📧 phum@example.com\n🐦 @phum.codes", x: 36, y: 72, color: "#2bd96b", by: "Ploy" },
+const TEAM = [
+  ["Mint", "#39ff88"], ["Bank", "#b6ff3b"], ["Ploy", "#00e5b0"], ["Ice", "#5eead4"], ["Tonkla", "#a3e635"],
+  ["Fah", "#34d399"], ["Nont", "#4ade80"], ["June", "#facc15"], ["Kao", "#22d3ee"], ["Pim", "#86efac"],
 ];
+const IDLE_CHAT = ["ใครเปลี่ยนฟอนต์ 👀", "ขยับซ้ายอีก 2px", "ship it 🚀", "☕ พักแป๊บ", "สวยมาก!!", "อันนี้ auto layout ยัง?",
+  "555555", "ใครลบ layer ผม 😭", "เขียวกว่านี้ได้อีก", "LGTM ✅", "ขอ component หน่อย", "ตามมาดูตรงนี้", "แมวเดินผ่านคีย์บอร์ด 🐈"];
 
-const CURSORS = [
-  { name: "Mint", color: "#39ff88" },
-  { name: "Bank", color: "#b6ff3b" },
-  { name: "Ploy", color: "#00e5b0" },
-];
-/* ========================================================= */
-
-const stage = document.getElementById("stage");
-const hint = document.getElementById("hint");
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const rand = (a, b) => a + Math.random() * (b - a);
+const canvas = document.getElementById("canvas");
+const layerEl = document.getElementById("layer");
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-let runId = 0;
-let liveCursors = [];
+const sleep = ms => new Promise(r => setTimeout(r, reduce ? Math.min(ms, 30) : ms));
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[(Math.random() * arr.length) | 0];
+const $ = (root, s) => root.querySelector(s);
+const $$ = (root, s) => [...root.querySelectorAll(s)];
+let autoplay = true;
 
-/* ---------- พื้นหลัง: ฝนตัวอักษร ---------- */
-const rain = document.getElementById("rain"), rctx = rain.getContext("2d");
-const glyphs = "アイウエオカキクケコサシスセソタチツテト0123456789กขคงจฉชซฌญ<>/{}=+*".split("");
-let drops = [];
-function sizeRain() {
-  rain.width = innerWidth; rain.height = innerHeight;
-  drops = Array.from({ length: Math.ceil(innerWidth / 18) }, () => rand(-40, 0));
+/* ---------- geometry (canvas coordinates) ---------- */
+function rel(el) {
+  const a = el.getBoundingClientRect(), c = canvas.getBoundingClientRect();
+  return { x: a.left - c.left, y: a.top - c.top, w: a.width, h: a.height };
 }
-sizeRain(); addEventListener("resize", () => { sizeRain(); sizeTrail(); });
-setInterval(() => {
-  if (reduce) return;
-  rctx.fillStyle = "rgba(3,7,5,.14)"; rctx.fillRect(0, 0, rain.width, rain.height);
-  rctx.font = "15px JetBrains Mono, monospace";
-  drops.forEach((d, i) => {
-    const ch = glyphs[(Math.random() * glyphs.length) | 0];
-    rctx.fillStyle = Math.random() < .08 ? "#d9ffe9" : "#1fd46e";
-    rctx.fillText(ch, i * 18, d * 18);
-    drops[i] = d * 18 > rain.height && Math.random() > .975 ? 0 : d + 1;
-  });
-}, 60);
+const canvasTop = () => canvas.getBoundingClientRect().top + scrollY;
 
-/* ---------- แสงตามเมาส์ ---------- */
-addEventListener("pointermove", e => {
-  document.documentElement.style.setProperty("--mx", e.clientX + "px");
-  document.documentElement.style.setProperty("--my", e.clientY + "px");
+/* camera: ตอน auto tour ให้จอเลื่อนตามงาน */
+let lastCam = 0;
+function follow(r) {
+  if (!autoplay) return;
+  const top = canvasTop() + r.y, vh = innerHeight;
+  if (top < scrollY + 90 || top + Math.min(r.h, 200) > scrollY + vh - 90) {
+    if (performance.now() - lastCam < 700) return;
+    lastCam = performance.now();
+    scrollTo({ top: top - vh * 0.32, behavior: "smooth" });
+  }
+}
+
+/* ---------- prepare typed text ---------- */
+function esc(s) { return s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+$$(document, "[data-type]").forEach(el => {
+  el._text = el.textContent; el._html = el.innerHTML;
+  el.classList.add("tw");
+  el.innerHTML = `<span class="tw-ghost">${el._html}</span><span class="tw-live"></span>`;
 });
 
-/* ---------- หางประกายของเคอร์เซอร์ + สะเก็ดตอนคลิก ---------- */
-const trail = document.getElementById("trail"), tctx = trail.getContext("2d");
-let parts = [];
-function sizeTrail() { const d = devicePixelRatio || 1; trail.width = innerWidth * d; trail.height = innerHeight * d; tctx.setTransform(d, 0, 0, d, 0, 0); }
-sizeTrail();
-function burst(x, y, color, n = 18) {
-  for (let i = 0; i < n; i++) {
-    const a = Math.random() * Math.PI * 2, s = rand(1.5, 5);
-    parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, decay: rand(.02, .04), r: rand(1.2, 2.6), color });
-  }
-}
-(function loop() {
-  tctx.clearRect(0, 0, innerWidth, innerHeight);
-  if (!reduce) for (const c of liveCursors) {
-    const b = c.el.getBoundingClientRect();
-    if (c.lx !== undefined && Math.hypot(b.left - c.lx, b.top - c.ly) > 1.5)
-      parts.push({ x: b.left + 3, y: b.top + 3, vx: rand(-.3, .3), vy: rand(-.3, .3), life: 1, decay: .035, r: 2.2, color: c.color });
-    c.lx = b.left; c.ly = b.top;
-  }
-  tctx.globalCompositeOperation = "lighter";
-  parts = parts.filter(p => (p.life -= p.decay) > 0);
-  for (const p of parts) {
-    p.x += p.vx; p.y += p.vy; p.vx *= .94; p.vy *= .94;
-    tctx.fillStyle = p.color;
-    tctx.globalAlpha = p.life * .25; tctx.beginPath(); tctx.arc(p.x, p.y, p.r * 3, 0, Math.PI * 2); tctx.fill();
-    tctx.globalAlpha = p.life; tctx.beginPath(); tctx.arc(p.x, p.y, p.r * p.life + .3, 0, Math.PI * 2); tctx.fill();
-  }
-  tctx.globalAlpha = 1;
-  requestAnimationFrame(loop);
-})();
+/* ---------- chrome ---------- */
+const toolsEl = document.getElementById("tools");
+function setTool(t) { $$(toolsEl, ".tool").forEach(x => x.classList.toggle("on", x.dataset.t === t)); }
 
-/* ---------- เคอร์เซอร์ ---------- */
+function toast(c, text) {
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.innerHTML = `<span class="av" style="--cc:${c.color}">${c.name[0]}</span><span><b style="color:${c.color}">${c.name}</b> ${text}</span>`;
+  document.getElementById("toasts").appendChild(t);
+  setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 320); }, 2200);
+}
+
+const actEl = document.getElementById("activity");
+function activity(c, text) {
+  const d = document.createElement("div");
+  d.style.setProperty("--cc", c.color);
+  d.innerHTML = `<b>${c.name}</b> ${text}`;
+  actEl.prepend(d);
+  while (actEl.children.length > 14) actEl.lastChild.remove();
+}
+
+const layersEl = document.getElementById("layers");
+function frameLayer(frame) {
+  if (frame._ul) return frame._ul;
+  const li = document.createElement("li");
+  li.innerHTML = `<div><span class="ic">#</span>${frame.dataset.name}</div><ul></ul>`;
+  layersEl.appendChild(li);
+  frame._ul = li.querySelector("ul");
+  return frame._ul;
+}
+function addLayer(el, c, kind) {
+  const frame = el.closest(".frame");
+  const ul = frameLayer(frame);
+  const icon = { text: "T", ellipse: "◯", line: "╱", rect: "▭" }[kind] || "▭";
+  const li = document.createElement("li");
+  li.innerHTML = `<div class="hot" style="--cc:${c.color}"><span class="ic">${icon}</span>${nameOf(el)}<span class="who"></span></div>`;
+  ul.appendChild(li);
+  setTimeout(() => li.firstChild.classList.remove("hot"), 1600);
+  const side = layersEl.parentElement;
+  side.scrollTop = side.scrollHeight;
+}
+function inspect(c, el, r, fill) {
+  const n = document.getElementById("pName");
+  n.style.setProperty("--cc", c.color);
+  n.lastElementChild.textContent = nameOf(el) + " · " + c.name;
+  document.getElementById("pX").textContent = Math.round(r.x);
+  document.getElementById("pY").textContent = Math.round(r.y);
+  document.getElementById("pW").textContent = Math.round(r.w);
+  document.getElementById("pH").textContent = Math.round(r.h);
+  const sw = document.getElementById("pFill");
+  sw.style.setProperty("--sw", fill || "#1c2822");
+  sw.lastElementChild.textContent = fill ? fill.toUpperCase() : "Fill";
+}
+
+/* ---------- cursors ---------- */
 function cursorSVG(color) {
   return `<svg width="22" height="24" viewBox="0 0 22 24"><path d="M2 1.5 L2 19.5 L7 15 L10.5 22.5 L13.6 21 L10.2 13.8 L17 13.5 Z" fill="${color}" stroke="#03110a" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
 }
 class Cursor {
-  constructor({ name, color }) {
-    this.name = name; this.color = color; this.busy = false;
+  constructor([name, color]) {
+    this.name = name; this.color = color; this.busy = false; this.q = Promise.resolve();
     this.el = document.createElement("div");
     this.el.className = "cursor";
     this.el.style.setProperty("--cc", color);
-    this.el.innerHTML = cursorSVG(color) + `<span class="tag">${name}</span>`;
-    stage.appendChild(this.el);
-    this.place(rand(0, innerWidth), innerHeight + 40, 0);
+    this.el.innerHTML = cursorSVG(color) + `<span class="tag">${name}</span><span class="chat"></span>`;
+    layerEl.appendChild(this.el);
+    this.x = 0; this.y = 0;
   }
   place(x, y, dur) {
     this.x = x; this.y = y;
-    this.el.style.setProperty("--dur", dur + "ms");
+    this.el.style.setProperty("--dur", (reduce ? 0 : dur) + "ms");
     this.el.style.transform = `translate(${x}px, ${y}px)`;
   }
   async moveTo(x, y) {
     const d = Math.hypot(x - this.x, y - this.y);
-    const dur = reduce ? 0 : Math.min(1300, 320 + d * 0.85);
+    const dur = Math.min(1150, 280 + d * 0.65);
     this.place(x, y, dur);
-    await sleep(dur + 60);
+    await sleep(dur + 40);
   }
+  down() { this.el.classList.add("down"); }
+  up() { this.el.classList.remove("down"); }
   async click() {
-    this.el.classList.add("press");
+    this.down();
     const r = document.createElement("div");
-    r.className = "ripple";
-    r.style.setProperty("--cc", this.color);
+    r.className = "ripple"; r.style.setProperty("--cc", this.color);
     r.style.left = this.x + 2 + "px"; r.style.top = this.y + 2 + "px";
-    stage.appendChild(r);
-    setTimeout(() => r.remove(), 750);
-    burst(this.x + 2 - scrollX, this.y + 2 - scrollY, this.color);
-    await sleep(140);
-    this.el.classList.remove("press");
+    layerEl.appendChild(r); setTimeout(() => r.remove(), 650);
+    await sleep(130); this.up();
   }
-  async wander(id) {
-    while (id === runId) {
-      if (!this.busy) {
-        const nx = Math.min(innerWidth - 90, Math.max(10, this.x + rand(-110, 110)));
-        await this.moveTo(nx, Math.max(20, this.y + rand(-70, 70)));
-      }
-      await sleep(rand(600, 1500));
+  async say(text, ms = 2600) {
+    const ch = $(this.el, ".chat");
+    ch.textContent = text; ch.classList.add("on"); this.el.classList.add("talk");
+    clearTimeout(this._ct);
+    this._ct = setTimeout(() => { ch.classList.remove("on"); this.el.classList.remove("talk"); }, ms);
+    await sleep(400);
+  }
+  run(fn) {
+    const p = this.q.then(async () => { this.busy = true; this.el.classList.add("busy"); try { await fn(this); } finally { this.busy = false; this.el.classList.remove("busy"); } });
+    this.q = p.catch(() => {});
+    return p;
+  }
+  async wander() {
+    while (true) {
+      await sleep(rand(1200, 3200));
+      if (this.busy || !this.joined) continue;
+      const cw = canvas.clientWidth, top = scrollY - canvasTop();
+      const x = rand(30, Math.max(60, cw - 140));
+      const y = rand(top + 110, top + innerHeight - 160);
+      this.moveTo(x, y);
+      if (Math.random() < .12) this.say(pick(IDLE_CHAT));
     }
   }
 }
+const nameOf = el => el.dataset.name || (el.textContent || "").trim().slice(0, 18) || "Layer";
+const C = Object.fromEntries(TEAM.map(t => [t[0], new Cursor(t)]));
 
-function layout(i) {
-  const W = innerWidth;
-  if (W < 760) {
-    const y = i === 0 ? 40 : 210 + (i - 1) * 195;
-    const x = i === 0 ? 20 : (i % 2 ? 18 : Math.max(18, W - Math.min(290, W * .84) - 18));
-    return { x, y };
-  }
-  const H = Math.max(innerHeight, 720);
-  return { x: NOTES[i].x / 100 * W, y: NOTES[i].y / 100 * H };
+/* ---------- actions ---------- */
+function selBox(c, x, y, w, h, shape) {
+  const s = document.createElement("div");
+  s.className = "sel" + (shape === "ellipse" ? " ellipse" : "");
+  s.style.setProperty("--cc", c.color);
+  s.style.cssText += `left:${x}px;top:${y}px;width:${w}px;height:${h}px`;
+  s.innerHTML = "<i></i><i></i><i></i><i></i><span class='dim'></span>";
+  layerEl.appendChild(s);
+  return s;
 }
-
-function fitStage() {
-  const notes = [...stage.querySelectorAll(".note")];
-  const bottom = notes.reduce((m, n) => Math.max(m, n.offsetTop + n.offsetHeight), 0);
-  stage.style.minHeight = Math.max(innerHeight, bottom + 120) + "px";
-}
-
-function makeNote(data, by, pos) {
-  const n = document.createElement("div");
-  n.className = "note" + (data.type === "title" ? " title" : "");
-  if (data.color) n.style.setProperty("--c", data.color);
-  n.style.setProperty("--r", data.type === "title" ? "0deg" : rand(-2, 2).toFixed(1) + "deg");
-  n.style.left = pos.x + "px"; n.style.top = pos.y + "px";
-  n.innerHTML = (data.title ? `<h3></h3>` : "") + `<div class="body"></div>` +
-    (data.type === "title" ? "" : `<div class="by" style="color:${by.color}">— typed by ${by.name}</div>`);
-  if (data.title) n.querySelector("h3").textContent = data.title;
-  stage.appendChild(n);
-  makeDraggable(n);
-  return n;
-}
-
-async function typeInto(note, text, cursor, id) {
-  const body = note.querySelector(".body");
-  note.classList.add("typing");
-  for (const ch of Array.from(text)) {
-    if (id !== runId) return;
-    body.textContent += ch;
-    const r = document.createRange(); r.selectNodeContents(body);
-    const rects = r.getClientRects(); const last = rects[rects.length - 1];
-    if (last) cursor.place(last.right + scrollX + 8, last.bottom + scrollY - 6, 110);
-    fitStage();
-    await sleep(reduce ? 0 : (ch === "\n" ? 200 : rand(25, 65)));
-  }
-  note.classList.remove("typing");
-  note.classList.add("done");
-}
-
-/* ---------- หน้าบูตแบบเทอร์มินัล ---------- */
-async function boot(id) {
-  const el = document.getElementById("boot"), pre = document.getElementById("bootText");
-  el.classList.remove("hide"); pre.innerHTML = "";
-  const lines = [
-    ["> booting profile.exe", ""],
-    ["> loading memories", " [OK]"],
-    ["> connecting Mint, Bank, Ploy", " [OK]"],
-    ["> rendering vibes", " [100%]"],
-  ];
-  for (const [l, ok] of lines) {
-    for (const ch of l) { if (id !== runId) return; pre.innerHTML += ch; await sleep(reduce ? 0 : 18); }
-    await sleep(reduce ? 0 : 140);
-    pre.innerHTML += `<span class="ok">${ok}</span>\n`;
-  }
-  await sleep(reduce ? 0 : 350);
-  el.classList.add("hide");
-}
-
-async function play() {
-  const id = ++runId;
-  stage.innerHTML = ""; parts = [];
-  hint.classList.remove("show");
-  await boot(id);
-  if (id !== runId) return;
-  const cursors = Object.fromEntries(CURSORS.map(c => [c.name, new Cursor(c)]));
-  liveCursors = Object.values(cursors);
-  liveCursors.forEach(c => c.wander(id));
-
-  const queues = {};
-  NOTES.forEach((n, i) => {
-    const name = cursors[n.by] ? n.by : CURSORS[i % CURSORS.length].name;
-    (queues[name] ||= []).push(i);
+function countUp(el, to, ms, fmt = v => v) {
+  const t0 = performance.now();
+  return new Promise(res => {
+    (function f(t) {
+      const k = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = fmt(Math.round(to * e));
+      k < 1 && !reduce ? requestAnimationFrame(f) : (el.textContent = fmt(to), res());
+    })(t0);
   });
+}
 
-  const jobs = Object.entries(queues).map(async ([name, idxs], k) => {
-    const c = cursors[name];
-    await sleep(k * 650 + 250);
-    for (const i of idxs) {
-      if (id !== runId) return;
-      while (i > 0 && !stage.querySelector(`[data-i="${i - 1}"]`) && id === runId) await sleep(120);
-      c.busy = true;
-      const pos = layout(i);
-      await c.moveTo(pos.x, pos.y);
-      await c.click();
-      const note = makeNote(NOTES[i], c, pos);
-      note.dataset.i = i;
-      await sleep(250);
-      await typeInto(note, NOTES[i].text, c, id);
-      c.busy = false;
-      await sleep(400);
+async function draw(c, el, verb = "สร้าง") {
+  const shape = el.dataset.shape === "ellipse" ? "ellipse" : "rect";
+  setTool(shape);
+  const r = rel(el); follow(r);
+  await c.moveTo(r.x, r.y);
+  c.down();
+  const s = selBox(c, r.x, r.y, 0, 0, shape);
+  const dur = reduce ? 0 : Math.min(1300, 500 + (r.w + r.h) * 0.6);
+  s.offsetWidth;
+  s.style.transition = `width ${dur}ms cubic-bezier(.45,.05,.2,1), height ${dur}ms cubic-bezier(.45,.05,.2,1)`;
+  s.style.width = r.w + "px"; s.style.height = r.h + "px";
+  c.place(r.x + r.w, r.y + r.h, dur);
+  const dim = $(s, ".dim"), t0 = performance.now();
+  (function f(t) {
+    const k = Math.min(1, (t - t0) / Math.max(dur, 1));
+    dim.textContent = `${Math.round(r.w * k)} × ${Math.round(r.h * k)}`;
+    if (k < 1) requestAnimationFrame(f);
+  })(t0);
+  await sleep(dur + 40);
+  c.up();
+  el.classList.add("shown");
+  addLayer(el, c, shape);
+  inspect(c, el, r);
+  activity(c, `${verb} ${nameOf(el)}`);
+  setTimeout(() => { s.classList.add("fade"); setTimeout(() => s.remove(), 450); }, 350);
+  await sleep(200);
+}
+
+async function fill(c, el) {
+  setTool("move");
+  const r = rel(el); follow(r);
+  await c.moveTo(r.x + r.w * .5, r.y + r.h * .5);
+  await c.click();
+  el.style.setProperty("--sc", c.color); el.classList.add("is-sel");
+  inspect(c, el, r, el.dataset.fill);
+  await sleep(350);
+  el.classList.add("filled");
+  activity(c, `เปลี่ยนสี ${el.dataset.name} → ${el.dataset.fill}`);
+  await sleep(600);
+  el.classList.remove("is-sel");
+}
+
+async function type(c, el, speed = 1) {
+  setTool("text");
+  const live = $(el, ".tw-live");
+  const r = rel(el); follow(r);
+  await c.moveTo(r.x, r.y + Math.min(r.h, 40) / 2);
+  await c.click();
+  el.style.setProperty("--tc", c.color);
+  el.classList.add("typing");
+  addLayer(el, c, "text");
+  inspect(c, el, r);
+  const chars = Array.from(el._text.replace(/\s+/g, " ").trim());
+  let i = 0;
+  for (const ch of chars) {
+    live.textContent += ch;
+    if (++i % 2 === 0 || i === chars.length) {
+      const rg = document.createRange(); rg.selectNodeContents(live);
+      const rects = rg.getClientRects(), last = rects[rects.length - 1], cr = canvas.getBoundingClientRect();
+      if (last) c.place(last.right - cr.left + 6, last.bottom - cr.top - 4, 110);
     }
-  });
-
-  await Promise.all(jobs);
-  if (id === runId) hint.classList.add("show");
+    await sleep((ch === " " ? 70 : rand(28, 70)) / speed);
+  }
+  live.innerHTML = el._html; // คืน markup เดิม (เช่น <em>)
+  el.classList.remove("typing");
+  activity(c, `พิมพ์ "${el._text.trim().slice(0, 22)}${el._text.trim().length > 22 ? "…" : ""}"`);
+  await sleep(150);
 }
 
-/* ---------- ผู้เยี่ยมชมคลิกเพื่อทิ้งข้อความ ---------- */
-stage.addEventListener("click", e => {
-  if (e.target.closest(".note")) return;
-  const colors = ["#39ff88", "#b6ff3b", "#00e5b0", "#7dffb2"];
-  const color = colors[(Math.random() * colors.length) | 0];
-  burst(e.clientX, e.clientY, color, 24);
-  const n = makeNote({ title: "ข้อความถึงภูมิ", color }, { name: "you", color }, { x: e.pageX - 20, y: e.pageY - 20 });
-  n.classList.add("visitor");
-  const body = n.querySelector(".body");
-  body.contentEditable = "true";
-  body.dataset.placeholder = "พิมพ์อะไรก็ได้...";
-  body.focus();
-  body.addEventListener("blur", () => { if (!body.textContent.trim()) n.remove(); fitStage(); });
-  body.addEventListener("input", fitStage);
-  fitStage();
-});
-
-/* ---------- ลากโน้ต ---------- */
-function makeDraggable(n) {
-  n.addEventListener("pointerdown", e => {
-    if (e.target.isContentEditable) return;
-    const sx = e.clientX - n.offsetLeft, sy = e.clientY - n.offsetTop;
-    n.classList.add("dragging"); n.setPointerCapture(e.pointerId);
-    const mv = ev => { n.style.left = ev.clientX - sx + "px"; n.style.top = ev.clientY - sy + "px"; };
-    const up = () => { n.classList.remove("dragging"); n.removeEventListener("pointermove", mv); fitStage(); };
-    n.addEventListener("pointermove", mv);
-    n.addEventListener("pointerup", up, { once: true });
-  });
+async function move(c, el, dx, dy) {
+  setTool("move");
+  el.style.transition = "none";
+  el.style.translate = `${dx}px ${dy}px`;
+  el.classList.add("shown");
+  el.offsetWidth;
+  const r = rel(el); follow(r);
+  await c.moveTo(r.x + r.w / 2, r.y + r.h / 2);
+  c.down();
+  el.style.setProperty("--sc", c.color); el.classList.add("is-sel");
+  const dur = reduce ? 0 : Math.min(1100, 450 + Math.hypot(dx, dy) * 1.4);
+  el.style.transition = `translate ${dur}ms cubic-bezier(.45,.05,.2,1), opacity .35s`;
+  el.style.translate = "0px 0px";
+  c.place(r.x + r.w / 2 - dx, r.y + r.h / 2 - dy, dur);
+  await sleep(dur + 40);
+  c.up();
+  if (!el._layered) { addLayer(el, c, "rect"); el._layered = true; }
+  inspect(c, el, rel(el));
+  activity(c, `ย้าย ${nameOf(el)}`);
+  await sleep(300);
+  el.classList.remove("is-sel");
 }
 
-document.getElementById("replay").addEventListener("click", e => { e.stopPropagation(); play(); });
-play();
+async function bar(c, row) {
+  const b = $(row, ".bar"), i = $(b, "i"), label = $(row, "b"), v = +i.dataset.v;
+  const r = rel(b); follow(r);
+  await c.moveTo(r.x, r.y + r.h / 2);
+  c.down();
+  const dur = reduce ? 0 : 500 + v * 9;
+  i.style.transition = `width ${dur}ms cubic-bezier(.45,.05,.2,1)`;
+  i.style.width = v + "%";
+  c.place(r.x + r.w * v / 100, r.y + r.h / 2, dur);
+  countUp(label, v, dur, x => x + "%");
+  inspect(c, row, r, "#39FF88");
+  await sleep(dur + 40);
+  c.up();
+  activity(c, `ปรับ ${row.dataset.name} = ${v}%`);
+}
+
+async function count(c, stat) {
+  const b = $(stat, "b"), r = rel(b); follow(r);
+  await c.moveTo(r.x + 20, r.y + r.h / 2);
+  await c.click();
+  await countUp(b, +b.dataset.count, 1400, v => v.toLocaleString("en-US"));
+  activity(c, `อัปเดตตัวเลข ${stat.dataset.name}`);
+}
+
+async function line(c, ol) {
+  setTool("pen");
+  const r = rel(ol); follow(r);
+  await c.moveTo(r.x + 8, r.y + 6);
+  c.down();
+  const dur = reduce ? 0 : 1800;
+  ol.style.setProperty("--ld", dur + "ms");
+  ol.classList.add("drawn");
+  c.place(r.x + 8, r.y + r.h - 6, dur);
+  addLayer(ol, c, "line");
+  await sleep(dur + 40);
+  c.up();
+  activity(c, "ลากเส้น timeline");
+}
+
+async function comment(c, el, text, where = "tr") {
+  setTool("comment");
+  const r = rel(el); follow(r);
+  const x = where === "tr" ? r.x + r.w - 20 : r.x + 10, y = r.y - 14;
+  await c.moveTo(x, y);
+  await c.click();
+  const p = document.createElement("div");
+  p.className = "pin"; p.style.setProperty("--cc", c.color);
+  p.style.left = x + "px"; p.style.top = y - 30 + "px";
+  p.innerHTML = `<div class="pa">${c.name[0]}</div><div class="pb"><b>${c.name}</b>${text}</div>`;
+  layerEl.appendChild(p);
+  activity(c, "คอมเมนต์ 💬");
+  setTimeout(() => p.classList.add("closed"), 5000);
+  await sleep(700);
+}
+
+/* ---------- section scripts ---------- */
+const frames = $$(document, ".frame");
+const all = (...ps) => Promise.all(ps);
+const job = (name, fn) => C[name].run(fn);
+
+const SCRIPTS = [
+  // 01 Hero
+  f => all(
+    job("Mint", async c => { await draw(c, $(f, ".avatar")); await fill(c, $(f, ".avatar")); await c.say("ใส่รูปแมวแทนดีมั้ย 🐈"); }),
+    job("Bank", async c => { await sleep(500); await type(c, $(f, ".kicker")); await type(c, $(f, "h1"), .8); await c.say("ชื่อใหญ่ๆ ไปเลย"); }),
+    job("Ploy", async c => { await sleep(1400); await draw(c, $(f, ".badge")); await sleep(2600); await type(c, $(f, ".lead"), 1.3); }),
+    job("Ice", async c => { await sleep(4200); await move(c, $(f, ".btn.primary"), -160, 90); await move(c, $(f, ".btn.ghost"), 160, 110);
+      await comment(c, $(f, ".btn.primary"), "ปุ่มนี้เรืองแสงได้อีก 💚"); }),
+    job("June", async c => { await sleep(7000); await c.say("ทุกคน ตรงนี้ไฟล์หลักนะ 👋"); }),
+  ),
+  // 02 About
+  f => all(
+    job("Tonkla", async c => { await draw(c, $(f, ".photo")); await fill(c, $(f, ".photo")); await c.say("แมวคือ brand ของภูมิ"); }),
+    job("Fah", async c => { await sleep(600); await type(c, $(f, ".eyebrow")); await type(c, $(f, "h2")); await type(c, $(f, ".bio"), 1.6); }),
+    job("Nont", async c => { await sleep(2500); for (const [k, ch] of $$(f, ".chip").entries()) await move(c, ch, 60 + k * 30, 70); }),
+    job("Kao", async c => { await sleep(5200); await comment(c, $(f, ".bio"), "Hi5 นี่ปีไหนนะ 😂"); }),
+  ),
+  // 03 Skills
+  f => {
+    const rows = $$(f, ".skill");
+    return all(
+      job("Pim", async c => { await type(c, $(f, ".eyebrow")); await type(c, $(f, "h2")); await c.say("ทำ progress bar กันเถอะ"); }),
+      job("Mint", async c => { await sleep(900); for (const r of rows.slice(0, 3)) await draw(c, r, "วาด"); }),
+      job("Ice", async c => { await sleep(1600); for (const r of rows.slice(3)) await draw(c, r, "วาด"); }),
+      job("Bank", async c => { await sleep(3200); for (const r of rows.slice(0, 3)) { while (!r.classList.contains("shown")) await sleep(100); await bar(c, r); } }),
+      job("June", async c => { await sleep(4400); for (const r of rows.slice(3)) { while (!r.classList.contains("shown")) await sleep(100); await bar(c, r); }
+        await comment(c, rows[5], "ตื่นเช้า 12% ยังเยอะไป 😴"); }),
+    );
+  },
+  // 04 Projects
+  f => {
+    const cards = $$(f, ".card");
+    const build = (name, card, delay, note) => job(name, async c => {
+      await sleep(delay);
+      await draw(c, card);
+      await fill(c, $(card, ".thumb"));
+      await type(c, $(card, "h3"));
+      await type(c, $(card, "p"), 1.4);
+      for (const t of $$(card, ".tag")) await move(c, t, 40, 40);
+      if (note) await c.say(note);
+    });
+    return all(
+      job("Ploy", async c => { await type(c, $(f, ".eyebrow")); await type(c, $(f, "h2")); }),
+      build("Kao", cards[0], 900, "การ์ดแรกเสร็จ ✅"),
+      build("Fah", cards[1], 1700, "ใส่ไอคอนฝนแล้ว 🌦️"),
+      build("Tonkla", cards[2], 2500, "ผักยังไม่โตเลย 🌱"),
+      job("Nont", async c => { await sleep(9000); await comment(c, cards[1], "อันนี้ขอดู prototype หน่อย"); }),
+    );
+  },
+  // 05 Journey
+  f => {
+    const items = $$(f, ".tl li");
+    return all(
+      job("June", async c => { await type(c, $(f, ".eyebrow")); await type(c, $(f, "h2")); }),
+      job("Pim", async c => { await sleep(1000); await line(c, $(f, ".tl")); await c.say("เส้นตรงสวยๆ ✏️"); }),
+      job("Bank", async c => { await sleep(2600); for (const li of items.slice(0, 3)) { await move(c, li, -80, 0); await type(c, $(li, "span"), 1.3); } }),
+      job("Ice", async c => { await sleep(4000); for (const li of items.slice(3)) { while (!items[2].classList.contains("shown")) await sleep(120); await move(c, li, -80, 0); await type(c, $(li, "span"), 1.3); }
+        await comment(c, items[2], "เมื่อวานจริง 555"); }),
+    );
+  },
+  // 06 Numbers
+  f => {
+    const st = $$(f, ".stat");
+    return all(
+      job("Nont", async c => { await type(c, $(f, ".eyebrow")); await type(c, $(f, "h2")); }),
+      job("Mint", async c => { await sleep(700); await draw(c, st[0]); await count(c, st[0]); }),
+      job("Ploy", async c => { await sleep(1200); await draw(c, st[1]); await count(c, st[1]); await c.say("ลาเต้เยอะไปมั้ย ☕"); }),
+      job("Kao", async c => { await sleep(1700); await draw(c, st[2]); await count(c, st[2]); }),
+      job("Fah", async c => { await sleep(2200); await draw(c, st[3]); await count(c, st[3]); await comment(c, st[3], "ตัวเลขนี้ห้ามบอกลูกค้า 🤫"); }),
+    );
+  },
+  // 07 Moodboard
+  f => {
+    const sh = n => $(f, n);
+    return all(
+      job("Tonkla", async c => { await type(c, $(f, ".eyebrow")); await type(c, $(f, "h2")); await c.say("ขอ vibe แบบ Canva"); }),
+      job("Ice", async c => { await sleep(800); await draw(c, sh(".s-circle")); await fill(c, sh(".s-circle")); await draw(c, sh(".s-blob")); await fill(c, sh(".s-blob")); }),
+      job("June", async c => { await sleep(1400); await draw(c, sh(".s-star")); await fill(c, sh(".s-star")); await move(c, sh(".s-pill"), -120, 40); }),
+      job("Pim", async c => { await sleep(2000); await draw(c, sh(".s-square")); await fill(c, sh(".s-square")); await move(c, sh(".s-cat"), 140, -60); await c.say("แมวดำต้องมี 🐈‍⬛"); }),
+      job("Bank", async c => { await sleep(4200); await type(c, sh(".s-word")); await comment(c, sh(".s-word"), "คำนี้แหละ concept"); }),
+    );
+  },
+  // 08 Team says
+  f => {
+    const s = $$(f, ".sticky");
+    const st = (name, el, d) => job(name, async c => { await sleep(d); await draw(c, el, "แปะโน้ต"); await type(c, $(el, "p"), 1.2); });
+    return all(
+      job("Mint", async c => { await type(c, $(f, ".eyebrow")); await type(c, $(f, "h2")); await c.say("ทุกคนเขียนคนละโน้ตนะ ✍️"); }),
+      st("Fah", s[0], 900), st("Nont", s[1], 1300), st("June", s[2], 1700),
+      st("Kao", s[3], 2100), st("Pim", s[4], 2500), st("Tonkla", s[5], 2900),
+    );
+  },
+  // 09 Contact
+  f => all(
+    job("Ploy", async c => { await type(c, $(f, ".eyebrow")); await type(c, $(f, "h2"), .9); }),
+    job("Bank", async c => { await sleep(2600); await type(c, $(f, ".mail")); await c.say("อีเมลสมมตินะ 😉"); }),
+    job("Ice", async c => { await sleep(3200); for (const [k, s] of $$(f, ".social").entries()) await move(c, s, (k - 1.5) * 90, 80); }),
+    job("Mint", async c => { await sleep(5200); await move(c, $(f, ".btn"), 0, 120); await comment(c, $(f, ".btn"), "ปุ่มนี้แหละ ที่สำคัญสุด"); }),
+    job("Nont", async c => { await sleep(7000); await type(c, $(f, ".foot")); }),
+  ),
+];
+
+/* ---------- run each section once ---------- */
+const started = new Map(), done = new Set();
+function start(i) {
+  if (started.has(i)) return started.get(i);
+  const f = frames[i];
+  frameLayer(f);
+  f.classList.add("live");
+  const p = SCRIPTS[i](f).then(() => sleep(600)).then(() => { f.classList.remove("live"); done.add(i); });
+  started.set(i, p);
+  if (i === frames.length - 1) p.then(finale);
+  return p;
+}
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting && ready && !autoplay) start(frames.indexOf(e.target));
+}), { threshold: .25 });
+frames.forEach(f => io.observe(f));
+let ready = false;
+
+/* ---------- auto tour ---------- */
+const tourBtn = document.getElementById("tourBtn");
+function setAuto(v) {
+  autoplay = v;
+  tourBtn.classList.toggle("on", v);
+  tourBtn.textContent = v ? "⏸ Auto tour" : "▶ Auto tour";
+  if (v) tour();
+}
+let touring = false;
+async function tour() {
+  if (touring) return; touring = true;
+  for (let i = 0; i < frames.length && autoplay; i++) {
+    if (done.has(i)) continue;
+    const r = rel(frames[i]);
+    scrollTo({ top: canvasTop() + r.y - 90, behavior: "smooth" });
+    await sleep(700);
+    await start(i);
+    await sleep(1200);
+  }
+  touring = false;
+}
+["wheel", "touchmove"].forEach(ev => addEventListener(ev, () => autoplay && setAuto(false), { passive: true }));
+addEventListener("keydown", e => { if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", " ", "Home", "End"].includes(e.key) && autoplay) setAuto(false); });
+tourBtn.onclick = () => setAuto(!autoplay);
+document.getElementById("replay").onclick = () => { scrollTo(0, 0); location.reload(); };
+
+/* ---------- finale ---------- */
+async function finale() {
+  const f = frames[frames.length - 1], r = rel($(f, ".btn"));
+  const cs = Object.values(C);
+  cs.forEach((c, k) => c.run(async c => {
+    const a = (k / cs.length) * Math.PI * 2;
+    await c.moveTo(r.x + r.w / 2 + Math.cos(a) * 170, r.y + r.h / 2 + Math.sin(a) * 110);
+  }));
+  await sleep(1400);
+  for (const [k, c] of cs.entries()) { c.say(pick(["🎉", "เสร็จแล้ว!", "ship it 🚀", "เยี่ยม!", "💚", "ปิดไฟล์ได้"]), 4000); await sleep(120); }
+  for (let i = 0; i < 70; i++) {
+    const p = document.createElement("div");
+    p.className = "confetti";
+    p.style.left = rand(0, 100) + "vw";
+    p.style.background = pick(TEAM)[1];
+    p.style.animationDuration = rand(2.2, 4.2) + "s";
+    p.style.animationDelay = rand(0, .8) + "s";
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 5200);
+  }
+  setAuto(false);
+}
+
+/* ---------- boot: เปิดไฟล์ แล้วทีมทยอยเข้า ---------- */
+(async () => {
+  scrollTo(0, 0);
+  await sleep(100);
+  document.getElementById("ldbar").style.width = "100%";
+  await sleep(1400);
+  document.getElementById("loader").classList.add("hide");
+  const avs = document.getElementById("avatars");
+  const shown = innerWidth < 720 ? 3 : 6;
+  for (const [k, c] of Object.values(C).entries()) {
+    const cw = canvas.clientWidth;
+    c.place(rand(40, cw - 140), rand(140, innerHeight - 160), 0);
+    c.el.classList.add("in"); c.joined = true;
+    if (k < shown) avs.insertAdjacentHTML("afterbegin", `<span class="av" style="--cc:${c.color}">${c.name[0]}</span>`);
+    else { $(avs, ".more")?.remove(); avs.insertAdjacentHTML("afterbegin", `<span class="av more">+${k - shown + 1}</span>`); }
+    if (k < 4 || k === TEAM.length - 1) toast(c, "เข้าร่วมไฟล์");
+    c.wander();
+    await sleep(220);
+  }
+  await sleep(500);
+  ready = true;
+  tour();
+})();
 </script>
 </body>
 </html>
